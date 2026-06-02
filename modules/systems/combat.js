@@ -1009,10 +1009,16 @@ module.exports = function (Engine) {
 		)
 	}
 
-	function attacker_ignores_trench_for_flank(game, attackers = null, target_space = null) {
+	function attacker_ignores_persistent_trench_effects(game, attackers = null, target_space = null) {
 		return (
 			attacker_has_massed_cavalry_desert_ignore(game, attackers) ||
-			attacker_has_maude_trench_ignore(game, target_space) ||
+			attacker_has_maude_trench_ignore(game, target_space)
+		)
+	}
+
+	function attacker_ignores_trench_for_flank(game, attackers = null, target_space = null) {
+		return (
+			attacker_ignores_persistent_trench_effects(game, attackers, target_space) ||
 			attacker_has_jihad_offensive_trench_ignore(game, attackers)
 		)
 	}
@@ -1380,8 +1386,9 @@ module.exports = function (Engine) {
 
 	function can_cancel_defender_retreat(game, target_space, retreating_faction, retreating_units) {
 		if (!(target_space > 0) || !Array.isArray(retreating_units) || retreating_units.length === 0) return false
-		let target_terrain = get_combat_target_terrain(game, target_space, game.attack?.pieces)
-		let trench = attacker_has_maude_trench_ignore(game, target_space)
+		let cavalry_charge = attacker_has_massed_cavalry_desert_ignore(game, game.attack?.pieces)
+		let target_terrain = cavalry_charge ? "clear" : get_combat_target_terrain(game, target_space, game.attack?.pieces)
+		let trench = attacker_ignores_persistent_trench_effects(game, game.attack?.pieces, target_space)
 			? 0
 			: get_defender_trench_level(game, target_space, retreating_faction, retreating_units)
 		let defensive_ground =
@@ -3731,7 +3738,7 @@ module.exports = function (Engine) {
 						att_fire_first = true
 						ignore_terrain = true
 						mark_effected(CC_AP_HAVERSACK_RUSE)
-						log_detail(log, "Haversack Ruse: Attacker Fires First & Ignores Terrain!")
+						log_detail(log, "背包计谋：进攻方率先开火且忽略地形效果")
 					}
 				}
 				if (game.combat_cards.attacker.includes(CC_AP_MASSED_CAVALRY_CHARGE)) {
@@ -3739,24 +3746,24 @@ module.exports = function (Engine) {
 						ignore_trench = true
 						ignore_desert = true
 						mark_effected(CC_AP_MASSED_CAVALRY_CHARGE)
-						log_detail(log, "Massed Cavalry Charge: Trench & Desert Effects Cancelled!")
+						log_detail(log, "集群骑兵冲锋：无视战壕与沙漠")
 					}
 				}
 				if (game.combat_cards.attacker.includes(CC_AP_MAUDE)) {
 					if (!data.spaces[target_space].vp) {
 						ignore_trench = true
 						mark_effected(CC_AP_MAUDE)
-						log_detail(log, "Maude: Trench effects cancelled (non-VP space)!")
+						log_detail(log, "莫德：战壕效果取消（非VP格）")
 					}
 				}
 				if (game.combat_cards.attacker.includes(CC_AP_PUSH_TO_THE_BREAKING_POINT)) {
 					mark_effected(CC_AP_PUSH_TO_THE_BREAKING_POINT)
-					log_detail(log, "Push to the Breaking Point played: Eligible units may attack again if they win.")
+					log_detail(log, "竭尽全力：符合条件的单位若获胜可再次进攻。")
 				}
 				if (game.combat_cards.attacker.includes(CC_CP_ARMY_OF_ISLAM)) {
 					att_fire_first = true
 					mark_effected(CC_CP_ARMY_OF_ISLAM)
-					log_detail(log, "Army of Islam: Attacker Fires First!")
+					log_detail(log, "伊斯兰军：进攻方率先开火")
 				}
 			}
 			// Defender Cards
@@ -3771,7 +3778,7 @@ module.exports = function (Engine) {
 				if (game.combat_cards.defender.includes(CC_CP_ARMY_OF_ISLAM)) {
 					def_fire_first = true
 					mark_effected(CC_CP_ARMY_OF_ISLAM)
-					log_detail(log, "Army of Islam: Defender Fires First!")
+					log_detail(log, "伊斯兰军：防守方率先开火")
 				}
 			}
 		}
@@ -3781,7 +3788,7 @@ module.exports = function (Engine) {
 			if (has_yildrim && game.events && game.events["yildrim_trench_used"] !== game.turn) {
 				ignore_trench = true
 				game.events["yildrim_trench_used"] = game.turn
-				log_detail(log, "Yildrim Offensive: Trench effects cancelled for this attack")
+				log_detail(log, "耶尔德里姆攻势：取消战壕")
 			}
 		}
 
@@ -3816,12 +3823,12 @@ module.exports = function (Engine) {
 			let bulls_eye_drm = bulls_eye_ru_attack_drm(game, defenders)
 			if (bulls_eye_drm) {
 				att_drm += bulls_eye_drm
-				log_detail(log, "Bull's Eye Directive: +1 DRM vs RU")
+				log_detail(log, "靶心指令：对俄国单位 +1 DRM")
 			}
 			if (game.events && game.events["arab_desertion"]) {
 				if (attackers.some((p) => data.pieces[p].nation === "tua")) {
 					att_drm -= 1
-					log_detail(log, "Arab Desertion: -1 DRM for TUA units")
+					log_detail(log, "阿拉伯人背弃：TU-A单位-1 DRM")
 				}
 			}
 		}
@@ -3830,7 +3837,7 @@ module.exports = function (Engine) {
 			if (game.events && game.events["arab_desertion"]) {
 				if (defenders.some((p) => data.pieces[p].nation === "tua")) {
 					def_drm -= 1
-					log_detail(log, "Arab Desertion: -1 DRM for TUA units")
+					log_detail(log, "阿拉伯人背弃：TU-A单位-1 DRM")
 				}
 			}
 		}
@@ -3858,7 +3865,7 @@ module.exports = function (Engine) {
 			if (game.combat_cards.attacker.includes(CC_AP_MARCH_AND_COUNTERMARCH)) {
 				att_drm += 1
 				mark_effected(CC_AP_MARCH_AND_COUNTERMARCH)
-				log_detail(log, "March and Countermarch: +1 DRM")
+				log_detail(log, "前后佯动: +1 DRM")
 			}
 		}
 
@@ -3931,7 +3938,7 @@ module.exports = function (Engine) {
 					let bonus = set_has(game.reduced, p) ? data.pieces[p].rlf || 0 : data.pieces[p].lf || 0
 					att_drm += bonus
 					used_arty.attacker.push(p)
-					log_detail(log, `Attacker Heavy Artillery provides +${bonus} DRM`)
+					log_detail(log, `进攻方重炮部队提供 +${bonus} DRM`)
 				}
 			}
 		}
@@ -3994,24 +4001,24 @@ module.exports = function (Engine) {
 			)
 			if (is_tu_attacking && is_turn_event(game, "yildrim_offensive")) {
 				att_drm += 1
-				log_detail(log, "Yildrim Offensive: +1 DRM for TU/TU-A attacks")
+				log_detail(log, "耶尔德里姆攻势：TU/TU-A攻击+1 DRM")
 			}
 			if (is_tu_attacking && is_turn_event(game, "jihad_offensive")) {
 				att_drm += 1
 				mark_effected(CC_CP_JIHAD_OFFENSIVE)
-				log_detail(log, "Jihad Offensive: +1 DRM for TU/TU-A attacks")
+				log_detail(log, "圣战攻势：TU/TU-A攻击+1 DRM")
 			}
 			// 67: LIBERATE SUEZ - Attacks in Egypt get +1 DRM
 			if (game.liberate_suez_drm && Engine.map.is_egypt(target_space) && game.active === CP) {
 				att_drm += 1
-				log_detail(log, "LIBERATE SUEZ: +1 DRM for attacks in Egypt")
+				log_detail(log, "解放苏伊士：在埃及的攻击+1 DRM")
 			}
 			// 69: INDIAN MUTINY - Attacks against Indian units get +1 DRM
 			if (game.indian_mutiny_drm && game.active === CP) {
 				let has_indian_defenders = defenders.some((p) => piece_counts_as_nation_for_rule(game, p, "in"))
 				if (has_indian_defenders) {
 					att_drm += 1
-					log_detail(log, "INDIAN MUTINY: +1 DRM for attacks against Indian units")
+					log_detail(log, "印度哗变：对印度部队的攻击+1 DRM")
 				}
 			}
 			if (game.cc_jafar_pasha && game.cc_jafar_pasha.post_roll && game.active === CP) {
@@ -4059,11 +4066,11 @@ module.exports = function (Engine) {
 			let def_has_alpenkorps = defenders.some((p) => data.pieces[p] && data.pieces[p].name === "GE Alpenkorps")
 			if (att_has_alpenkorps) {
 				att_drm += 1
-				log_detail(log, "Alpenkorps: Attacker +1 DRM in Mountains")
+				log_detail(log, "Alpenkorps：进攻方位于，山地+1 DRM")
 			}
 			if (def_has_alpenkorps) {
 				def_drm += 1
-				log_detail(log, "Alpenkorps: Defender +1 DRM in Mountains")
+				log_detail(log, "Alpenkorps：防守方位于山地，+1 DRM")
 			}
 		}
 
@@ -4172,7 +4179,7 @@ module.exports = function (Engine) {
 			att_loss_mod += 1
 			def_loss_mod -= 1
 			mark_effected(CC_AP_NO_PRISONERS)
-			log_detail(log, "No Prisoners: 进攻方伤害 +1，防守方伤害 -1")
+			log_detail(log, "不留活口：进攻方伤害+1，防守方伤害-1")
 		}
 
 		function log_fire(faction, cf, roll, drm, losses, table, shifts) {

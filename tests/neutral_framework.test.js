@@ -200,6 +200,23 @@ describe("中立国统一框架", () => {
 		expect(Engine.map.get_valid_rebuild_spaces(game, roDiv, AP)).not.toContain(odessa)
 	})
 
+	test("Romanian units can spend AP replacement points before collapse", () => {
+		let game = setupGame(2026060204)
+		let army = findPiece(AP, "RO 1 Army")
+		let bucharest = findSpace("BUCHAREST")
+		let odessa = findSpace("Odessa")
+
+		Engine.neutral.trigger_romania_entry(game)
+		game.pieces[army] = ELIMINATED
+		game.rp_ap.a = 1
+
+		let cost = Engine.map.get_replacement_cost(game, army)
+
+		expect(cost).toBe(1)
+		expect(Engine.map.can_afford_replacement(game, army, cost)).toBe(true)
+		expect(Engine.map.get_valid_rebuild_spaces(game, army, AP)).toEqual(expect.arrayContaining([bucharest, odessa]))
+	})
+
 	test("保加利亚与罗马尼亚事件会通过统一接口切换国家归属与默认控制", () => {
 		let game = setupGame(2026041803, "Historical")
 		let bulgariaEvent = Engine.events.get_event_by_id(88)

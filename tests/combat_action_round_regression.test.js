@@ -112,11 +112,17 @@ test("Save Tiflis returns Enver Goes East to its queued second attack", () => {
 	expect(game.events.save_tiflis).toBeUndefined()
 })
 
-function createMaudeRetreatCancelGame(targetName, originName = "Baghdad") {
+function createRetreatCancelGame({
+	targetName,
+	originName = "Baghdad",
+	attackerName = "BR IX Corps",
+	attackerCard = Engine.combat.CC_AP_MAUDE,
+	withTrench = true
+}) {
 	let game = rules.setup(104, "Historical", { seed: 42, no_supply_warnings: true })
 	let origin = findSpaceByName(originName)
 	let target = findSpaceByName(targetName)
-	let attacker = findPieceByName("BR IX Corps")
+	let attacker = findPieceByName(attackerName)
 	let defender1 = findPieceByName("TU DIV #8")
 	let defender2 = findPieceByName("TU DIV #9")
 
@@ -136,8 +142,8 @@ function createMaudeRetreatCancelGame(targetName, originName = "Baghdad") {
 	game.trenches = []
 	game.trenches_2 = []
 	game.trench_owner = []
-	Engine.game_utils.place_trench(game, target, rules.CP)
-	game.combat_cards = { attacker: [Engine.combat.CC_AP_MAUDE], defender: [] }
+	if (withTrench) Engine.game_utils.place_trench(game, target, rules.CP)
+	game.combat_cards = { attacker: [attackerCard], defender: [] }
 	game.combat_cards_effected = []
 	game.post_roll_cc_done = true
 	game.post_battle_cc_done = true
@@ -166,6 +172,10 @@ function createMaudeRetreatCancelGame(targetName, originName = "Baghdad") {
 	}
 
 	return { game, target, defender1, defender2 }
+}
+
+function createMaudeRetreatCancelGame(targetName, originName = "Baghdad") {
+	return createRetreatCancelGame({ targetName, originName })
 }
 
 function createLcuRetreatCancelGame() {
@@ -791,6 +801,24 @@ test("Maude does not stop non-trench defensive terrain from cancelling retreat",
 	expect(game.battle_result.retreat_can_cancel).toBe(true)
 })
 
+test.each([
+	["defender trench", "Ctesiphon", "Baghdad", true],
+	["desert terrain", "Beersheba", "Gaza", false]
+])("Massed Cavalry Charge removes %s retreat cancellation", (_label, targetName, originName, withTrench) => {
+	let { game } = createRetreatCancelGame({
+		targetName,
+		originName,
+		attackerName: "ANZ Desert Corps",
+		attackerCard: Engine.combat.CC_AP_MASSED_CAVALRY_CHARGE,
+		withTrench
+	})
+
+	Engine.combat.end_battle_sequence(game, () => {})
+
+	expect(game.state).toBe("retreat")
+	expect(game.battle_result.retreat_can_cancel).toBe(false)
+})
+
 test("retreat cancellation waits for defender confirmation and can be cancelled", () => {
 	let { game, defender1, defender2 } = createMaudeRetreatCancelGame("Bayburt", "Oltu")
 
@@ -897,6 +925,72 @@ test("HQ can accompany an eligible advancing combat unit but cannot anchor advan
 		advance_with_reduced: false
 	})
 	expect(advance).toEqual([])
+})
+
+test("Baratov stack can advance full-strength units when another attacker is reduced", () => {
+	let game = rules.setup(112, "Historical", { seed: 42, no_supply_warnings: true })
+	let baku = findSpaceByName("Baku")
+	let enzeli = findSpaceByName("Enzeli")
+	let baratov = findPieceByName("RU Baratov HQ")
+	let ruDiv14 = findPieceByName("RU DIV #14")
+	let ruCav8 = findPieceByName("RU Cavalry #8")
+	let attackers = [baratov, ruDiv14, ruCav8]
+
+	for (let p = 0; p < game.pieces.length; p++) game.pieces[p] = 0
+	for (let p of attackers) game.pieces[p] = baku
+	game.control[baku] = rules.AP
+	game.control[enzeli] = rules.CP
+	game.active = rules.AP
+	game.reduced = [ruCav8]
+	game.retreated = []
+	game.events = { persian_push: true }
+	game.attacked = []
+	game.action_state = {}
+	game.cc_retained = { ap: [], cp: [] }
+	game.cc_retained_after_use = { ap: {}, cp: {} }
+	game.combat_cards = { attacker: [], defender: [] }
+	game.combat_cards_effected = []
+	game.post_roll_cc_done = true
+	game.post_battle_cc_done = true
+	game.attack = {
+		space: enzeli,
+		pieces: attackers,
+		attacker: rules.AP,
+		defender: rules.CP,
+		origin_by_piece: Object.fromEntries(attackers.map((p) => [p, baku])),
+		initial_attackers: attackers.slice(),
+		initial_defenders: []
+	}
+	game.battle_result = {
+		attacker_losses: 0,
+		defender_losses: 1,
+		retreat_needed: false,
+		retreating_faction: null,
+		retreating_units: [],
+		retreat_can_cancel: false,
+		retreat_distance: 1,
+		no_advance: false,
+		attackers: attackers.slice(),
+		defenders: [],
+		advance_with_reduced: false
+	}
+
+	Engine.combat.end_battle_sequence(game, () => {})
+
+	expect(game.state).toBe("advance")
+	expect(game.advance_pieces).toEqual(expect.arrayContaining([ruDiv14, baratov]))
+	expect(game.advance_pieces).not.toContain(ruCav8)
+	expect(rules.view(game, AP_ROLE).actions.piece).toContain(ruDiv14)
+
+	game = rules.action(game, AP_ROLE, "piece", ruDiv14)
+
+	expect(game.pieces[ruDiv14]).toBe(enzeli)
+	expect(rules.view(game, AP_ROLE).actions.piece).toContain(baratov)
+
+	game = rules.action(game, AP_ROLE, "piece", baratov)
+
+	expect(game.pieces[baratov]).toBe(enzeli)
+	expect(game.pieces[ruCav8]).toBe(baku)
 })
 
 test("Turkish Withdrawal lets different TU units retreat to different legal spaces", () => {

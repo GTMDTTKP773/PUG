@@ -3,7 +3,7 @@ const Engine = require("../modules/engine.js")
 
 const { setupGame, findSpace, findPiece } = require("./helpers.js")
 
-const { AP, CP } = Engine.constants
+const { AP, CP, ELIMINATED } = Engine.constants
 
 test("Bulgaria 入场单位会在开局预摆到展示位，但事件前保持锁定", () => {
 	let game = setupGame(2026041620, "Historical")
@@ -111,4 +111,26 @@ test("Bulgaria event places BU 3 Army in Rustchuk after Romania has entered", ()
 	expect(game.state).toBe("confirm_event")
 	expect(Engine.neutral.place_bulgaria_third_army(game, "Plevna")).toBe(false)
 	expect(game.pieces[bu3Army]).toBe(rustchuk)
+})
+
+test("To Help and Save You charges one VP for each started SCU batch", () => {
+	let game = setupGame(2026060202)
+	let scus = ["AH DIV #1", "AH DIV #2", "AH DIV #3", "AH DIV #4"].map((name) => findPiece(CP, name))
+	let startingVp = game.vp
+
+	for (let p of scus) game.pieces[p] = ELIMINATED
+	game.state = "event_to_help_and_save_you"
+	game.active = CP
+	game.event_ctx = { key: "to_help_and_save_you", data: {} }
+
+	game = rules.action(game, rules.roles[1], "piece", scus[0])
+	expect(game.vp).toBe(startingVp - 1)
+
+	game = rules.action(game, rules.roles[1], "piece", scus[1])
+	game = rules.action(game, rules.roles[1], "piece", scus[2])
+	expect(game.vp).toBe(startingVp - 1)
+
+	game = rules.action(game, rules.roles[1], "piece", scus[3])
+	expect(game.vp).toBe(startingVp - 2)
+	expect(game.event_ctx.data.count).toBe(4)
 })

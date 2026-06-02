@@ -4769,7 +4769,7 @@ module.exports = function (Engine) {
 			let cost = Engine.game_utils.is_lcu(p) ? 3 : 1
 			let data_event = rules.get_event_data()
 			data_event.count = (data_event.count || 0) + cost
-			let vps_to_deduct = Math.floor(data_event.count / 3) - Math.floor((data_event.count - cost) / 3)
+			let vps_to_deduct = Math.ceil(data_event.count / 3) - Math.ceil((data_event.count - cost) / 3)
 			if (vps_to_deduct > 0) {
 				game.vp -= vps_to_deduct
 				rules.log(`拯救保加利亚：- ${vps_to_deduct} VP`)

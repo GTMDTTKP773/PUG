@@ -5058,7 +5058,10 @@ module.exports = function (Engine) {
 
 		let capital = find_capital(nation)
 		if (capital >= 0) {
-			let owner_faction = data.spaces[capital].faction === "ap" ? AP : CP
+			let owner_faction = get_default_controller(game, capital)
+			if (owner_faction !== AP && owner_faction !== CP) {
+				owner_faction = data.spaces[capital].faction === "ap" ? AP : CP
+			}
 			let enemy = other_faction(owner_faction)
 			// Rule 22.1.5: currently enemy-controlled or besieged
 			return is_controlled_by(game, capital, enemy) || is_besieged(game, capital)

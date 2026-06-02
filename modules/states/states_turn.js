@@ -769,29 +769,37 @@ exports.register = function (states, Engine, context) {
 		let ap_drm = game.mo_ap_modifier || 0
 		let ap_roll = ap_die + ap_drm
 
-		let cp_die = roll_die()
 		let cp_drm = 0
-		let cp_roll = cp_die + cp_drm
+		let cp_die
+		let cp_roll
+		if (!game.mo_cp_cancelled) {
+			cp_die = roll_die()
+			cp_roll = cp_die + cp_drm
+		}
+
+		let mo_ap = determine_mo_ap(ap_roll)
+		// Rule 5.1.2: Validity check (None or Reroll)
+		let status_ap = check_mo_validity(game, AP, mo_ap)
+		while (status_ap === "REROLL") {
+			ap_die = roll_die()
+			ap_roll = ap_die + ap_drm
+			mo_ap = determine_mo_ap(ap_roll)
+			status_ap = check_mo_validity(game, AP, mo_ap)
+		}
+		if (status_ap === "NONE") {
+			mo_ap = MO_NONE
+		}
+		game.mo_ap = mo_ap
+		game.mo_ap_die = ap_die
+		game.mo_ap_drm = ap_drm
 
 		if (game.mo_cp_cancelled) {
 			game.mo_cp = MO_NONE
 			game.mo_cp_fulfilled = true
+			delete game.mo_cp_die
+			delete game.mo_cp_drm
 		} else {
-			let mo_ap = determine_mo_ap(ap_roll)
 			let mo_cp = determine_mo_cp(cp_roll)
-
-			// Rule 5.1.2: Validity check (None or Reroll)
-			let status_ap = check_mo_validity(game, AP, mo_ap)
-			while (status_ap === "REROLL") {
-				ap_die = roll_die()
-				ap_roll = ap_die + ap_drm
-				mo_ap = determine_mo_ap(ap_roll)
-				status_ap = check_mo_validity(game, AP, mo_ap)
-			}
-			if (status_ap === "NONE") {
-				mo_ap = MO_NONE
-			}
-
 			let status_cp = check_mo_validity(game, CP, mo_cp)
 			while (status_cp === "REROLL") {
 				cp_die = roll_die()
@@ -803,10 +811,7 @@ exports.register = function (states, Engine, context) {
 				mo_cp = MO_NONE
 			}
 
-			game.mo_ap = mo_ap
 			game.mo_cp = mo_cp
-			game.mo_ap_die = ap_die
-			game.mo_ap_drm = ap_drm
 			game.mo_cp_die = cp_die
 			game.mo_cp_drm = cp_drm
 		}
