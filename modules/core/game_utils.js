@@ -760,12 +760,12 @@ module.exports = function (Engine) {
 				} else {
 					// Rule 307: If no replacement SCU, LCU is permanently eliminated
 					is_lcu_pe = true
-			if (log) log(`LCU ${piece_log_name(game, p)} 被摧毁，由于没有可用的 SCU 替换：永久消除（PE）。`)
+			if (log) log(`LCU ${piece_log_name(game, p)} 被摧毁，由于没有可用的 SCU 替换：永久消灭（PE）。`)
 				}
 			} else {
 				// Rule 12.6.5: If unsupplied LCU is eliminated, it is permanently removed
 				is_lcu_pe = true
-			if (log) log(`未补给的 LCU ${piece_log_name(game, p)} 被摧毁：永久消除（PE）。`)
+			if (log) log(`未补给的 LCU ${piece_log_name(game, p)} 被摧毁：永久消灭（PE）。`)
 			}
 		}
 
@@ -776,7 +776,7 @@ module.exports = function (Engine) {
 			game.pieces[p] = get_permanently_eliminated_box(box_faction)
 			if (log) {
 				let label = info.piece_class === "LCU" ? "LCU" : "单位"
-			log(`${label} ${piece_log_name(game, p)} 被永久消除 (Permanently Eliminated)。`)
+			log(`${label} ${piece_log_name(game, p)} 被永久消灭 (PE)。`)
 			}
 		} else if (is_tribe(p)) {
 			game.pieces[p] = get_eliminated_box(box_faction)

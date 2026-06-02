@@ -462,7 +462,7 @@ exports.register = function (states, Engine, context) {
 			let violation = violations[0]
 			res.where(violation.space)
 			res.who(violation.counted)
-			res.prompt(`灾难性进攻：${space_name(violation.space)} 仍然超堆叠，选择一个 AP 单位永久消除。`)
+			res.prompt(`灾难性进攻：${space_name(violation.space)} 仍然超堆叠，选择一个 AP 单位永久消灭。`)
 			for (let p of violation.counted) res.piece(p)
 		},
 		piece(p) {

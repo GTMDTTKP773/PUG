@@ -219,13 +219,13 @@ exports.register = function (states, Engine, context) {
 				if ((info.nation === "tu" || info.nation === "tua") && info.piece_class === "LCU") {
 					let roll = roll_die()
 					let lf = set_has(game.reduced, p) ? info.rlf : info.lf
-					log(`Galicia Attrition roll for ${info.name}: ${roll} (LF: ${lf})`)
+					log(`加利西亚激战：${info.name} 掷骰${roll} (血量${lf})`)
 					if (roll > lf) {
 						if (set_has(game.reduced, p)) {
-							log(`${info.name} hit in Galicia Attrition (Eliminated/Replaced)`)
+							log(`加利西亚激战：${info.name} 被消灭`)
 							eliminate_piece(p, false)
 						} else {
-							log(`${info.name} reduced in Galicia Attrition`)
+							log(`加利西亚激战：${info.name} 减损`)
 							set_add(game.reduced, p)
 						}
 					}
@@ -240,7 +240,7 @@ exports.register = function (states, Engine, context) {
 			let oos_units = [...game.oos]
 			jihad_for_oos_attrition = oos_units.some((p) => is_jihad_oos_attrition_unit(p))
 			for (let p of oos_units) {
-				log(`${piece_name(p)} eliminated (OOS)`)
+				log(`${piece_name(p)} 被消灭 (OOS)`)
 				eliminate_piece(p, true)
 			}
 			game.oos = []

@@ -444,7 +444,7 @@ module.exports = function (Engine) {
 				// 19.3.5：无论在地图上还是在预备盒/消灭盒，GE-BU 第 11 集团军都必须移除。
 				let was_on_map = !is_not_on_map(game, gebu_xi)
 				let s = was_on_map ? game.pieces[gebu_xi] : -1
-				// 19.3.5：规则明确 "permanently eliminate"，GE-BU 第 11 集团军永久消除，不可通过事件取回。
+				// 19.3.5：规则明确 "permanently eliminate"，GE-BU 第 11 集团军永久消灭，不可通过事件取回。
 				eliminate_piece(game, gebu_xi, log, true)
 				if (was_on_map) {
 					// 替换仅在它原本在地图上时才执行（需要目标地块）。只能用 GE 步兵师（GE DIV #N），不含 Alpenkorps/HQ/炮兵/骑兵/Yildrim。

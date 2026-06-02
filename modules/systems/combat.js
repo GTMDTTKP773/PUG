@@ -2686,9 +2686,6 @@ module.exports = function (Engine) {
 			result.turkish_retreat_defender_retreats = false
 			result.advance_with_reduced = true
 			clear_turkish_retreat_state(game)
-			if (log_fn) {
-				log_fn("Catastrophic Attack: CP defender victory forces an AP attacking stack to retreat.")
-			}
 		}
 	}
 
@@ -2886,11 +2883,7 @@ module.exports = function (Engine) {
 			}
 			game.active = CP
 			game.state = "catastrophic_attack_choose_stack"
-			if (log_fn) {
-				log_fn(
-					"Catastrophic Attack: choose one attacking stack containing BR/IN/ANZ units to retreat one space, then advance with the defending CP stack."
-				)
-			}
+			if (log_fn) log_fn("灾难性攻击：将含英/印/澳新单位的进攻堆叠撤退1格，同盟国防守部队随后挺进。")
 			return
 		}
 
@@ -4145,9 +4138,6 @@ module.exports = function (Engine) {
 		if (trench_level > 0 && !ignore_trench) {
 			att_shifts -= trench_level
 			att_shift_factors.push(`-${trench_level} 战壕`)
-			if (!i_order_you_to_die_trench_bonus) {
-				log_detail(log, `Trench Level ${trench_level}: Shift ${trench_level} Left`)
-			}
 			def_shifts += 1
 			def_shift_factors.push("+1 战壕")
 			if (
@@ -4156,9 +4146,6 @@ module.exports = function (Engine) {
 				game.combat_cards.defender.includes(CC_CP_I_ORDER_YOU_TO_DIE)
 			) {
 				mark_effected(CC_CP_I_ORDER_YOU_TO_DIE)
-			}
-			if (!i_order_you_to_die_trench_bonus) {
-				log_detail(log, `Trench: Defender Shift 1 Right`)
 			}
 		}
 
@@ -4237,11 +4224,11 @@ module.exports = function (Engine) {
 
 		if (!att_fire_first && !def_fire_first) {
 			if (def_losses > att_losses) {
-				log(`*${def_losses}:${att_losses} Attacker Victory`)
+				log(`*${def_losses}:${att_losses} 进攻方获胜`)
 			} else if (att_losses > def_losses) {
-				log(`*${def_losses}:${att_losses} Defender Victory`)
+				log(`*${def_losses}:${att_losses} 防守方获胜`)
 			} else {
-				log(`*${def_losses}:${att_losses} Draw`)
+				log(`*${def_losses}:${att_losses} 平局`)
 			}
 		}
 

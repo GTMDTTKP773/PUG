@@ -180,7 +180,7 @@ describe("崩溃规则", () => {
 		expect(isRemoved(game, ahDiv5)).toBe(true)
 	})
 
-	test("塞尔维亚崩溃不会把保加利亚单位永久消除，但仍会移除保加利亚入场的 GE/AH 单位", () => {
+	test("塞尔维亚崩溃不会把保加利亚单位永久消灭，但仍会移除保加利亚入场的 GE/AH 单位", () => {
 		const game = createGame()
 		const log = makeLogger(game)
 		const buArmy = placePiece(game, CP, "BU 1 Army", "Vidin")

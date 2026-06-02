@@ -23,7 +23,7 @@ function findCard(event) {
 	return card
 }
 
-test("Russian Revolution Stage 1 adds the Romania VP and bars Gorlice-Tarnow", () => {
+test("俄国革命阶段 1：增加罗马尼亚 VP 并禁止 Gorlice-Tarnow 事件", () => {
 	let game = setupGame(2026051201, "Historical", { no_supply_warnings: true })
 	game.events = { parvus_to_berlin: 5 }
 	game.russian_vp = 4
@@ -38,7 +38,7 @@ test("Russian Revolution Stage 1 adds the Romania VP and bars Gorlice-Tarnow", (
 	expect(Engine.events.can_play_event(game, findCard("GORLICE-TARNOW"))).toBe(false)
 })
 
-test("Russian Revolution Stage 2 reduces RU units and eliminates RU LCUs in Corps Assets", () => {
+test("俄国革命阶段 2：翻面 RU 单位并从军团资产中移除 RU LCU", () => {
 	let game = setupGame(2026051202, "Historical", { no_supply_warnings: true })
 	clearBoard(game)
 	game.events = { russian_revolution: 1, romania: true }
@@ -56,7 +56,7 @@ test("Russian Revolution Stage 2 reduces RU units and eliminates RU LCUs in Corp
 	expect(Engine.game_utils.is_eliminated(game, army)).toBe(true)
 })
 
-test("New RU units enter reduced during Stages 2 and 3", () => {
+test("新的 RU 单位在阶段 2 和 3 进入时处于翻面状态", () => {
 	let game = setupGame(2026051203, "Historical", { no_supply_warnings: true })
 	game.events = { russian_revolution: 2 }
 	game.reduced = []
@@ -70,7 +70,7 @@ test("New RU units enter reduced during Stages 2 and 3", () => {
 	expect(Engine.game_utils.is_piece_reduced(game, ruDiv)).toBe(true)
 })
 
-test("Russian Revolution Stage 3 allows only one RU attack during the following turn", () => {
+test("俄国革命阶段 3：在下一回合仅允许一次 RU 进攻", () => {
 	let game = setupGame(2026051204, "Historical", { no_supply_warnings: true })
 	clearBoard(game)
 
@@ -100,7 +100,7 @@ test("Russian Revolution Stage 3 allows only one RU attack during the following 
 	expect(Engine.combat.get_legal_attackable_spaces(game, [ruDiv], AP, () => "Summer", () => true)).toEqual([])
 })
 
-test("Russian Revolution Stage 4 removes RU units, keeps the exceptions, and places new markers", () => {
+test("俄国革命阶段 4：移除 RU 单位，保留特例，并放置新标记", () => {
 	let game = setupGame(2026051205, "Historical", { no_supply_warnings: true })
 	clearBoard(game)
 	game.events = { russian_revolution: 4, romania: true }
@@ -157,7 +157,7 @@ test("Russian Revolution Stage 4 removes RU units, keeps the exceptions, and pla
 	expect(Engine.map.is_disrupted_by_enemy(game, findSpace("Baku"), CP)).toBe(true)
 })
 
-test("Russian Revolution Stage 4 uses player choices for cavalry, Georgia, Transcaucasia, and GE IX replacement", () => {
+test("俄国革命阶段 4：玩家选择骑兵、格鲁吉亚、外高加索和 GE IX 替换", () => {
 	let game = setupGame(2026052401, "Historical", { no_supply_warnings: true })
 	clearBoard(game)
 	game.events = {
@@ -253,7 +253,7 @@ test("Russian Revolution Stage 4 uses player choices for cavalry, Georgia, Trans
 	expect(Engine.game_utils.is_permanently_eliminated(game, yugo)).toBe(false)
 })
 
-test("Stage 4 blocks new RU reinforcements and RU reinforcement events", () => {
+test("阶段 4 阻止新的 RU 增援和 RU 增援事件", () => {
 	let game = setupGame(2026051206, "Historical", { no_supply_warnings: true })
 	game.events = { russian_revolution: 4 }
 

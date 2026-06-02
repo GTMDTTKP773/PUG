@@ -4755,7 +4755,7 @@ module.exports = function (Engine) {
 				let info = data.pieces[p]
 				if (info && (info.nation === "ah" || info.nation === "ge")) {
 					// 规则：只能取回"摧毁栏"（eliminated）和"移出游戏"（removed-only）的单位；
-					// 永久消除（permanently eliminated）的单位不可通过此事件返回。
+					// 永久消灭（permanently eliminated）的单位不可通过此事件返回。
 					if (Engine.game_utils.is_eliminated(game, p) || Engine.game_utils.is_removed_only(game, p)) {
 						res.piece(p)
 					}

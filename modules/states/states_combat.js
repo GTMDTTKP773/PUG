@@ -837,6 +837,7 @@ exports.register = function (states, Engine, context) {
 		"turkish_retreat",
 		"jafar_pasha_retreat",
 		"retreat_cancel",
+		"post_retreat_cancel",
 		"save_tiflis_retreat",
 		"choose_lcu_replacement",
 		"pre_flank_cc_attacker",
@@ -2629,7 +2630,6 @@ exports.register = function (states, Engine, context) {
 		game.selected_piece = null
 		game.active = AP
 		game.state = "catastrophic_attack_retreat"
-		log(`Catastrophic Attack: ${space_name(origin)} stack selected.`)
 		return true
 	}
 
@@ -2914,6 +2914,8 @@ exports.register = function (states, Engine, context) {
 	}
 
 	function continue_after_post_retreat_cancel() {
+		delete game.retreat_cancel_undo_depth
+		clear_undo()
 		game.retreat_phase_done = true
 		if (enter_post_retreat_ap_cc_window(null)) {
 			clear_retreat_runtime_state()
@@ -3003,9 +3005,16 @@ exports.register = function (states, Engine, context) {
 
 	function resume_replacement_return_state(return_state) {
 		game.state = return_state || "apply_defender_losses"
-		if (game.state === "post_retreat_cancel") {
-			continue_after_post_retreat_cancel()
+	}
+
+	function cancel_post_retreat_cancel() {
+		let undo_depth = Number.isInteger(game.retreat_cancel_undo_depth)
+			? game.retreat_cancel_undo_depth
+			: Math.max(0, (game.undo?.length || 0) - 1)
+		while ((game.undo?.length || 0) > undo_depth) {
+			if (!pop_undo()) break
 		}
+		delete game.retreat_cancel_undo_depth
 	}
 
 	function clear_retreat_runtime_state(options = {}) {
@@ -3400,7 +3409,9 @@ exports.register = function (states, Engine, context) {
 			res.action("proceed_retreat")
 		},
 		piece(p) {
+			let undo_depth = game.undo?.length || 0
 			push_undo()
+			game.retreat_cancel_undo_depth = undo_depth
 			log(`防守方取消撤退 ${format_piece_log(p)} 额外承受1级损失`)
 
 			game.retreat_pieces = []
@@ -3411,11 +3422,6 @@ exports.register = function (states, Engine, context) {
 
 			game.state = "post_retreat_cancel"
 			reduce_piece(p)
-
-			// If reduce_piece didn't trigger choose_lcu_replacement, we can proceed immediately
-			if (game.state === "post_retreat_cancel") {
-				continue_after_post_retreat_cancel()
-			}
 		},
 		proceed_retreat() {
 			push_undo()
@@ -3427,9 +3433,13 @@ exports.register = function (states, Engine, context) {
 		prompt(res) {
 			res.prompt("撤退取消已完成")
 			res.action("done")
+			res.action("cancel")
 		},
 		done() {
 			continue_after_post_retreat_cancel()
+		},
+		cancel() {
+			cancel_post_retreat_cancel()
 		}
 	}
 

@@ -380,8 +380,7 @@ module.exports = function (Engine) {
 		if (!is_russian_revolution_cavalry_candidate(p)) return false
 		if (Engine.game_utils.is_permanently_eliminated(game, p)) return false
 		if (Engine.game_utils.is_eliminated(game, p)) return false
-		if (is_reinforcement(game, p) || is_removed_only(game, p)) return false
-		return true
+		return !(is_reinforcement(game, p) || is_removed_only(game, p));
 	}
 
 	function choose_default_revolution_cavalry_survivor(game) {
@@ -426,8 +425,7 @@ module.exports = function (Engine) {
 		if (Engine.game_utils.is_permanently_eliminated(game, p)) return false
 		if (Engine.game_utils.is_eliminated(game, p)) return false
 		if (is_removed_only(game, p)) return false
-		if (is_reinforcement(game, p)) return false
-		return true
+		return !is_reinforcement(game, p);
 	}
 
 	function apply_russian_revolution_stage_1(game, ctx) {
@@ -436,7 +434,7 @@ module.exports = function (Engine) {
 		if (!game.events["romania"]) {
 			game.vp += 2
 			game.events["romania_barred_by_russian_revolution"] = true
-			log(game, "Russian Revolution Stage 1: Romania is neutral; VP +2 and Romania may not enter as an event.", ctx)
+			log(game, "俄国革命阶段 1：罗马尼亚中立，VP +2，罗马尼亚不得通过事件参战。", ctx)
 		}
 	}
 
@@ -451,12 +449,12 @@ module.exports = function (Engine) {
 			if (info.type === "hq") continue
 			if (info.piece_class === "LCU" && game.pieces[p] === corps_assets) {
 				game.pieces[p] = Engine.game_utils.get_eliminated_box(AP)
-				log(game, `Russian Revolution Stage 2: ${info.name} is eliminated from Corps Assets.`, ctx)
+				log(game, `俄国革命阶段 2：${info.name} 从预备军格中移除。`, ctx)
 				continue
 			}
 			if (!set_has(game.reduced, p)) {
 				set_add(game.reduced, p)
-				log(game, `Russian Revolution Stage 2: ${info.name} is reduced.`, ctx)
+				log(game, `俄国革命阶段 2：${info.name} 减损。`, ctx)
 			}
 		}
 	}
@@ -466,7 +464,7 @@ module.exports = function (Engine) {
 		game.events["russian_revolution_stage_3_applied"] = true
 		game.russian_revolution_limited_attack_turn = game.turn + 1
 		game.russian_revolution_ru_attack_used = false
-		log(game, `Russian Revolution Stage 3: RU units may conduct only one attack on Turn ${game.russian_revolution_limited_attack_turn}.`, ctx)
+		log(game, `俄国革命阶段 3：俄国单位在第 ${game.russian_revolution_limited_attack_turn} 回合只能进行一次进攻。`, ctx)
 	}
 
 	function remove_russian_revolution_stage_4_ru_units(game, ctx) {
@@ -484,9 +482,7 @@ module.exports = function (Engine) {
 			Engine.game_utils.eliminate_piece(game, p, (msg) => log(game, msg, ctx), true)
 		}
 		if (kept_cavalry >= 0) {
-			log(game, `Russian Revolution Stage 4: ${data.pieces[kept_cavalry].name} remains and is treated as BR except for MO.`, ctx)
-		} else {
-			log(game, "Russian Revolution Stage 4: no RU cavalry division remains to keep.", ctx)
+			log(game, `俄国革命阶段 4：${data.pieces[kept_cavalry].name} 保留，其被视为英国单位（MO除外）。`, ctx)
 		}
 	}
 
@@ -522,9 +518,9 @@ module.exports = function (Engine) {
 		game.events["russian_revolution_stage_4_geoprotect_done"] = true
 		if (is_controlled_by(game, s, CP)) {
 			game.vp -= 1
-			log(game, `Russian Revolution Stage 4: Georgian Protectorate placed in CP-controlled ${space_log_name(s)}; VP -1.`, ctx)
+			log(game, `俄国革命阶段 4：Georgian Protectorate放置在同盟国控制的 ${space_log_name(s)}，VP -1。`, ctx)
 		} else {
-			log(game, `Russian Revolution Stage 4: Georgian Protectorate placed in ${space_log_name(s)}.`, ctx)
+			log(game, `俄国革命阶段 4：Georgian Protectorate放置在 ${space_log_name(s)}。`, ctx)
 		}
 		game.pieces[p] = s
 		return true
@@ -541,7 +537,7 @@ module.exports = function (Engine) {
 		if (game.events["russian_revolution_stage_4_geoprotect_done"]) return
 		game.events["russian_revolution_stage_4_geoprotect_done"] = true
 		if (get_georgian_protectorate_piece(game) >= 0) {
-			log(game, "Russian Revolution Stage 4: Georgian Protectorate was not placed.", ctx)
+			log(game, "俄国革命阶段 4：Georgian Protectorate未放置。", ctx)
 		}
 	}
 
@@ -594,14 +590,14 @@ module.exports = function (Engine) {
 		}
 		set_add(game.russian_revolution_stage_4_transcas_skipped, p)
 		let name = data.pieces[p] ? data.pieces[p].name : `p${p}`
-		log(game, `Russian Revolution Stage 4: no legal AP-controlled Russia/Caucasia space for ${name}.`, ctx)
+		log(game, `俄国革命阶段 4：没有合法的协约国控制的俄国/高加索地块来放置 ${name}。`, ctx)
 	}
 
 	function place_transcaucasian_federation_piece(game, p, s, ctx) {
 		if (!can_place_transcaucasian_federation_piece(game, p, s)) return false
 		if (!is_reinforcement(game, p)) return false
 		game.pieces[p] = s
-		log(game, `Russian Revolution Stage 4: ${data.pieces[p].name} placed in ${space_log_name(s)}.`, ctx)
+		log(game, `俄国革命阶段 4：${data.pieces[p].name} 放置在 ${space_log_name(s)}。`, ctx)
 		return true
 	}
 
@@ -633,7 +629,7 @@ module.exports = function (Engine) {
 		game.events["russian_revolution_stage_4_soviet_done"] = true
 		let spaces = ["Baku", "Central Asia", "Enzeli"].map(find_space).filter((s) => s > 0)
 		game.soviet_uprising_markers = spaces
-		log(game, "Russian Revolution Stage 4: Soviet Uprising markers placed.", ctx)
+		log(game, "俄国革命阶段 4：苏维埃起义标记已放置。", ctx)
 	}
 
 	function prepare_ge_ix_army_replacement(game, ctx) {
@@ -645,8 +641,7 @@ module.exports = function (Engine) {
 			game.events["russian_revolution_stage_4_ge_ix_done"] = true
 			return
 		}
-		let space = game.pieces[ge_ix]
-		game.russian_revolution_stage_4_ge_ix_space = space
+		game.russian_revolution_stage_4_ge_ix_space = game.pieces[ge_ix]
 		Engine.game_utils.eliminate_piece(game, ge_ix, (msg) => log(game, msg, ctx), true)
 	}
 
@@ -672,7 +667,7 @@ module.exports = function (Engine) {
 		if (!game.events) game.events = {}
 		game.events["russian_revolution_stage_4_ge_ix_done"] = true
 		game.pieces[p] = space
-		log(game, `Russian Revolution Stage 4: GE IX Army replaced by ${data.pieces[p].name}.`, ctx)
+		log(game, `俄国革命阶段 4：GE IX Army 被 ${data.pieces[p].name} 替换。`, ctx)
 		delete game.russian_revolution_stage_4_ge_ix_space
 		return true
 	}
@@ -682,7 +677,7 @@ module.exports = function (Engine) {
 		if (game.events["russian_revolution_stage_4_ge_ix_done"]) return
 		game.events["russian_revolution_stage_4_ge_ix_done"] = true
 		if (get_ge_ix_replacement_space(game) > 0 && get_ge_ix_replacement_pieces(game).length > 0) {
-			log(game, "Russian Revolution Stage 4: GE IX Army was not replaced.", ctx)
+			log(game, "俄国革命阶段 4：GE IX Army 未被替换。", ctx)
 		}
 		delete game.russian_revolution_stage_4_ge_ix_space
 	}

@@ -168,6 +168,61 @@ function createMaudeRetreatCancelGame(targetName, originName = "Baghdad") {
 	return { game, target, defender1, defender2 }
 }
 
+function createLcuRetreatCancelGame() {
+	let game = rules.setup(105, "Historical", { seed: 42, no_supply_warnings: true })
+	let origin = findSpaceByName("Oltu")
+	let target = findSpaceByName("Bayburt")
+	let attacker = findPieceByName("BR IX Corps")
+	let defenderLcu = findPieceByName("TU I Corps")
+	let defenderScu = findPieceByName("TU DIV #8")
+	let replacements = ["TU DIV #10", "TU DIV #11", "TU DIV #12"].map(findPieceByName)
+	let reserve = Engine.game_utils.get_scu_reserve_box(rules.CP)
+
+	for (let p = 0; p < game.pieces.length; p++) game.pieces[p] = 0
+	for (let p of replacements) game.pieces[p] = reserve
+	game.pieces[attacker] = origin
+	game.pieces[defenderLcu] = target
+	game.pieces[defenderScu] = target
+	game.control[origin] = rules.AP
+	game.control[target] = rules.CP
+	game.active = rules.AP
+	game.reduced = [defenderLcu]
+	game.retreated = []
+	game.events = {}
+	game.cc_retained = { ap: [], cp: [] }
+	game.cc_retained_after_use = { ap: {}, cp: {} }
+	game.action_state = {}
+	game.combat_cards = { attacker: [], defender: [] }
+	game.combat_cards_effected = []
+	game.post_roll_cc_done = true
+	game.post_battle_cc_done = true
+	game.battle_resolution_side_effects_applied = true
+	game.attack = {
+		space: target,
+		pieces: [attacker],
+		attacker: rules.AP,
+		defender: rules.CP,
+		origin_by_piece: { [attacker]: origin },
+		initial_attackers: [attacker],
+		initial_defenders: [defenderLcu, defenderScu]
+	}
+	game.battle_result = {
+		attacker_losses: 0,
+		defender_losses: 2,
+		retreat_needed: true,
+		retreating_faction: rules.CP,
+		retreating_units: [defenderLcu, defenderScu],
+		retreat_can_cancel: true,
+		retreat_distance: 1,
+		no_advance: false,
+		attackers: [attacker],
+		defenders: [defenderLcu, defenderScu],
+		advance_with_reduced: false
+	}
+
+	return { game, target, defenderLcu, defenderScu, replacements, reserve }
+}
+
 function createSpecialUnitDrmGame(active, attackers, defenders) {
 	let game = rules.setup(103, "Historical", { seed: 42, no_supply_warnings: true })
 	let oltu = findSpaceByName("Oltu")
@@ -736,6 +791,62 @@ test("Maude does not stop non-trench defensive terrain from cancelling retreat",
 	expect(game.battle_result.retreat_can_cancel).toBe(true)
 })
 
+test("retreat cancellation waits for defender confirmation and can be cancelled", () => {
+	let { game, defender1, defender2 } = createMaudeRetreatCancelGame("Bayburt", "Oltu")
+
+	Engine.combat.end_battle_sequence(game, () => {})
+	game = rules.action(game, CP_ROLE, "piece", defender1)
+
+	expect(game.state).toBe("post_retreat_cancel")
+	expect(game.active).toBe(rules.CP)
+	expect(rules.view(game, CP_ROLE).actions.cancel).toBe(1)
+	expect(game.reduced).toContain(defender1)
+
+	game = rules.action(game, CP_ROLE, "cancel")
+
+	expect(game.state).toBe("retreat_cancel")
+	expect(game.active).toBe(rules.CP)
+	expect(game.reduced).not.toContain(defender1)
+	expect(game.retreat_pieces.sort((a, b) => a - b)).toEqual([defender1, defender2].sort((a, b) => a - b))
+	expect(game.undo).toHaveLength(0)
+})
+
+test("confirming retreat cancellation clears undo before passing control", () => {
+	let { game, defender1 } = createMaudeRetreatCancelGame("Bayburt", "Oltu")
+
+	Engine.combat.end_battle_sequence(game, () => {})
+	game = rules.action(game, CP_ROLE, "piece", defender1)
+	game = rules.action(game, CP_ROLE, "done")
+
+	expect(game.state).not.toBe("post_retreat_cancel")
+	expect(game.undo).toHaveLength(0)
+})
+
+test("cancelling retreat cancellation restores a manually replaced LCU", () => {
+	let { game, target, defenderLcu, defenderScu, replacements, reserve } = createLcuRetreatCancelGame()
+
+	Engine.combat.end_battle_sequence(game, () => {})
+	game = rules.action(game, CP_ROLE, "piece", defenderLcu)
+
+	expect(game.state).toBe("choose_lcu_replacement")
+	expect(game.attack.replacement.options).toEqual(replacements)
+
+	game = rules.action(game, CP_ROLE, "piece", replacements[0])
+
+	expect(game.state).toBe("post_retreat_cancel")
+	expect(game.pieces[replacements[0]]).toBe(target)
+
+	game = rules.action(game, CP_ROLE, "cancel")
+
+	expect(game.state).toBe("retreat_cancel")
+	expect(game.active).toBe(rules.CP)
+	expect(game.pieces[defenderLcu]).toBe(target)
+	expect(game.reduced).toContain(defenderLcu)
+	expect(game.pieces[replacements[0]]).toBe(reserve)
+	expect(game.retreat_pieces.sort((a, b) => a - b)).toEqual([defenderLcu, defenderScu].sort((a, b) => a - b))
+	expect(game.undo).toHaveLength(0)
+})
+
 test("Push to the Breaking Point can be played after the defender cancels retreat", () => {
 	let { game, defender1 } = createMaudeRetreatCancelGame("Bayburt", "Oltu")
 	let ptbp = findCardByEvent("PUSH TO THE BREAKING POINT CC")
@@ -749,6 +860,7 @@ test("Push to the Breaking Point can be played after the defender cancels retrea
 	expect(game.state).toBe("retreat_cancel")
 
 	game = rules.action(game, CP_ROLE, "piece", defender1)
+	game = rules.action(game, CP_ROLE, "done")
 
 	expect(game.state).toBe("post_retreat_cc_ap")
 	expect(rules.view(game, AP_ROLE).actions.play_cc).toContain(ptbp)
