@@ -1386,14 +1386,14 @@ module.exports = function (Engine) {
 
 	function can_cancel_defender_retreat(game, target_space, retreating_faction, retreating_units) {
 		if (!(target_space > 0) || !Array.isArray(retreating_units) || retreating_units.length === 0) return false
-		let cavalry_charge = attacker_has_massed_cavalry_desert_ignore(game, game.attack?.pieces)
-		let target_terrain = cavalry_charge ? "clear" : get_combat_target_terrain(game, target_space, game.attack?.pieces)
+		let target_terrain = get_combat_target_terrain(game, target_space, game.attack?.pieces)
+		let desert_cancelled = attacker_has_massed_cavalry_desert_ignore(game, game.attack?.pieces)
 		let trench = attacker_ignores_persistent_trench_effects(game, game.attack?.pieces, target_space)
 			? 0
 			: get_defender_trench_level(game, target_space, retreating_faction, retreating_units)
 		let defensive_ground =
 			target_terrain === FOREST ||
-			target_terrain === "desert" ||
+			(target_terrain === "desert" && !desert_cancelled) ||
 			target_terrain === SWAMP ||
 			target_terrain === MOUNTAIN ||
 			trench > 0
@@ -2367,7 +2367,16 @@ module.exports = function (Engine) {
 				return true
 			}
 		}
-		return !!game.cc_jafar_pasha_retreat
+		if (game.cc_jafar_pasha_retreat) {
+			return !jafar_pasha_retreat_continues_as_fort_attack(game)
+		}
+		return false
+	}
+
+	function jafar_pasha_retreat_continues_as_fort_attack(game) {
+		if (!game.cc_jafar_pasha_retreat || !game.attack || !(game.attack.space > 0)) return false
+		let factions = infer_attack_factions(game)
+		return has_undestroyed_fort(game, game.attack.space, factions.defender)
 	}
 
 	function resolve_battle_sequence(game, context) {
@@ -3600,6 +3609,39 @@ module.exports = function (Engine) {
 			if (log_fn) log_fn(msg)
 		}
 
+		if (game.cc_jafar_pasha_retreat) {
+			if (jafar_pasha_retreat_continues_as_fort_attack(game)) {
+				log("贾法尔帕夏：防守方撤退，进攻方继续攻击要塞。")
+				delete game.cc_jafar_pasha_retreat
+				delete game.jafar_pasha_advance_after_cancel
+				if (game.attack) game.attack.jafar_pasha_retreat_before_fort = true
+			} else {
+				let attackers = get_live_attackers(game)
+				let defenders = Array.isArray(game.attack?.initial_defenders) ? game.attack.initial_defenders.slice() : []
+				log("贾法尔帕夏：防守方撤退，战斗不进行。")
+				delete game.cc_jafar_pasha_retreat
+				return {
+					jafar_pasha_retreat: true,
+					attackers,
+					defenders,
+					attacker_losses: 0,
+					defender_losses: 0,
+					retreat_needed: false,
+					retreating_faction: null,
+					retreating_units: [],
+					retreat_can_cancel: false,
+					retreat_distance: 1,
+					no_advance: false,
+					catastrophic_attack: false,
+					turkish_retreat: false,
+					turkish_retreat_units: [],
+					turkish_retreat_optional_units: [],
+					turkish_retreat_defender_retreats: false,
+					advance_with_reduced: false
+				}
+			}
+		}
+
 		let pre_battle_cancel_reason = get_pre_battle_cancel_reason(game)
 		if (pre_battle_cancel_reason) {
 			let attackers = get_live_attackers(game)
@@ -4359,6 +4401,7 @@ module.exports = function (Engine) {
 			defender_losses: def_losses, // losses suffered by defender
 			attackers: attackers,
 			defenders: defenders,
+			jafar_pasha_retreat: !!game.attack?.jafar_pasha_retreat_before_fort,
 			att_fire_first,
 			def_fire_first,
 			att_roll,

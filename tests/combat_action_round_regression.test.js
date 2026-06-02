@@ -819,6 +819,21 @@ test.each([
 	expect(game.battle_result.retreat_can_cancel).toBe(false)
 })
 
+test("Massed Cavalry Charge does not remove non-desert terrain retreat cancellation", () => {
+	let { game } = createRetreatCancelGame({
+		targetName: "Bayburt",
+		originName: "Oltu",
+		attackerName: "ANZ Desert Corps",
+		attackerCard: Engine.combat.CC_AP_MASSED_CAVALRY_CHARGE,
+		withTrench: false
+	})
+
+	Engine.combat.end_battle_sequence(game, () => {})
+
+	expect(game.state).toBe("retreat_cancel")
+	expect(game.battle_result.retreat_can_cancel).toBe(true)
+})
+
 test("retreat cancellation waits for defender confirmation and can be cancelled", () => {
 	let { game, defender1, defender2 } = createMaudeRetreatCancelGame("Bayburt", "Oltu")
 

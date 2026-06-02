@@ -1240,6 +1240,7 @@ exports.register = function (states, Engine, context) {
 			},
 			take_retained_card() {
 				let after_use = get_cc_retained_after_use(faction, c)
+				if (c === combat.CC_CP_JAFAR_PASHA && faction === AP) after_use = "remove"
 				remove_cc_retained(faction, c)
 				return after_use
 			},
@@ -1284,6 +1285,7 @@ exports.register = function (states, Engine, context) {
 		let from_retained = set_has(retained, c)
 		let source_after_use = info.remove ? "remove" : "discard"
 		if (from_retained) source_after_use = get_cc_retained_after_use(faction, c)
+		if (from_retained && c === combat.CC_CP_JAFAR_PASHA && faction === AP) source_after_use = "remove"
 		if (is_attacker) {
 			game.combat_cards.attacker.push(c)
 		} else {
@@ -1695,7 +1697,7 @@ exports.register = function (states, Engine, context) {
 			if (!Array.isArray(game.retreated)) game.retreated = []
 			game.jafar_pasha_retreat = {
 				pieces: defenders,
-				avoided_spaces: attackers.map((p) => game.pieces[p])
+				avoided_spaces: game.attack?.space > 0 ? [game.attack.space] : []
 			}
 			game.retreat_distance = 1
 			game.retreat_from = game.attack.space
@@ -1804,21 +1806,9 @@ exports.register = function (states, Engine, context) {
 			ensure_attack_log_section("retreat_log_started", "撤退：")
 			log(`>> ${format_piece_log(p)} → s${s}`)
 			game.pieces[p] = s
+			game.retreat_from = s
 			game.retreat_space = s
-			if (!Engine.map.is_controlled_by(game, s, game.active) && can_unit_gain_control(p)) {
-				set_control(game, s, game.active)
-			}
-			if (Engine.check_persia_entry_vp_penalty) {
-				Engine.check_persia_entry_vp_penalty(game, s, [p])
-			}
-			if (from > 0) {
-				Engine.sync_neutral_vp_state(game, from)
-				Engine.sync_jihad_city_state(game, from)
-				Engine.sync_region_control(game, from)
-			}
-			Engine.sync_region_control(game, s)
-			Engine.sync_neutral_vp_state(game, s)
-			Engine.sync_jihad_city_state(game, s)
+			finalize_retreat_unit(game, p, from, s)
 			set_delete(state.pieces, p)
 			set_add(game.retreated, p)
 			game.selected_piece = null
