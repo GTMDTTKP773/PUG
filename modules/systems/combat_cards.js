@@ -805,12 +805,7 @@ module.exports = function (Engine) {
 		},
 		[combat.CC_CP_PASHA_1]: {
 			windows: get_pre_weather_both_sides_windows,
-			can_play: can_play_pasha_1,
-			modifiers: {
-				drm({ has_nation, side_pieces }) {
-					return has_nation(side_pieces, ["ge"]) ? 1 : 0
-				}
-			}
+			can_play: can_play_pasha_1
 		},
 		[combat.CC_CP_CZARS_ARMORIES]: {
 			windows: new Set(["post_advance_cc_cp"]),

@@ -3850,6 +3850,7 @@ module.exports = function (Engine) {
 		) {
 			att_table = fire_table.lcu
 			mark_effected(CC_CP_PASHA_1)
+			log_detail(log, "帕夏一号：进攻方使用 LCU 火力表")
 		}
 		if (
 			game.active === AP &&
@@ -3859,6 +3860,7 @@ module.exports = function (Engine) {
 		) {
 			def_table = fire_table.lcu
 			mark_effected(CC_CP_PASHA_1)
+			log_detail(log, "帕夏一号：防守方使用 LCU 火力表")
 		}
 
 		if (game.active === CP) {
