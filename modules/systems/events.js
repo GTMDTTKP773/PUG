@@ -3926,7 +3926,7 @@ module.exports = function (Engine) {
 			},
 			use_ops: true,
 			handler: function (game) {
-				game.events["yildrim_offensive"] = game.turn
+				game.events["yildrim_offensive"] = { turn: game.turn, action_round: game.action_round }
 			}
 		},
 		110: {

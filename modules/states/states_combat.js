@@ -764,6 +764,14 @@ exports.register = function (states, Engine, context) {
 		game.active = game.attack?.attacker || game.active
 		if (
 			game.attack &&
+			game.attack.yildrim_offensive_trench_negate === undefined &&
+			combat.can_offer_yildrim_offensive_trench_negate(game, game.attack.pieces, game.attack.space)
+		) {
+			game.state = "yildrim_offensive_negate"
+			return
+		}
+		if (
+			game.attack &&
 			game.attack.jihad_offensive_negate === undefined &&
 			combat.can_offer_jihad_offensive_negate(game, game.attack.pieces, game.attack.space)
 		) {
@@ -2181,12 +2189,35 @@ exports.register = function (states, Engine, context) {
 		negate() {
 			push_undo()
 			if (!combat.use_jihad_offensive_negate(game)) game.attack.jihad_offensive_negate = false
-			continue_after_jihad_offensive_negate_choice()
+			continue_after_pre_flank_cc_step()
 		},
 		decline() {
 			push_undo()
 			if (game.attack) game.attack.jihad_offensive_negate = false
-			continue_after_jihad_offensive_negate_choice()
+			continue_after_pre_flank_cc_step()
+		}
+	}
+
+	states.yildrim_offensive_negate = {
+		inactive: "耶尔德里姆攻势",
+		prompt(res) {
+			if (game.attack && game.attack.space !== -1) {
+				res.where(game.attack.space)
+				res.who(game.attack.pieces || [])
+			}
+			res.prompt("耶尔德里姆攻势：是否取消本次战斗的战壕效果？")
+			res.action("negate")
+			res.action("decline")
+		},
+		negate() {
+			push_undo()
+			if (!combat.use_yildrim_offensive_trench_negate(game)) game.attack.yildrim_offensive_trench_negate = false
+			continue_after_pre_flank_cc_step()
+		},
+		decline() {
+			push_undo()
+			if (game.attack) game.attack.yildrim_offensive_trench_negate = false
+			continue_after_pre_flank_cc_step()
 		}
 	}
 

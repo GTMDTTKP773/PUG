@@ -994,6 +994,24 @@ module.exports = function (Engine) {
 		return marker_matches_current_action_round(game, game.events && game.events["jihad_offensive_used"])
 	}
 
+	function set_yildrim_offensive_active(game) {
+		if (!game.events) game.events = {}
+		game.events["yildrim_offensive"] = current_action_round_marker(game)
+	}
+
+	function is_yildrim_offensive_active(game) {
+		return marker_matches_current_action_round(game, game.events && game.events["yildrim_offensive"])
+	}
+
+	function set_yildrim_offensive_trench_used(game) {
+		if (!game.events) game.events = {}
+		game.events["yildrim_trench_used"] = current_action_round_marker(game)
+	}
+
+	function is_yildrim_offensive_trench_used(game) {
+		return marker_matches_current_action_round(game, game.events && game.events["yildrim_trench_used"])
+	}
+
 	function has_russian_winter_offensive_weather_immunity(game, p, season) {
 		return (
 			season === "Winter" &&
@@ -1033,6 +1051,11 @@ module.exports = function (Engine) {
 		return pieces.some((p) => ["tu", "tua"].includes(data.pieces[p]?.nation))
 	}
 
+	function has_yildrim_offensive_attackers(game, attackers = null) {
+		let pieces = attackers || game.attack?.pieces || []
+		return pieces.some((p) => data.pieces[p]?.symbol === "Y")
+	}
+
 	function get_jihad_offensive_negate_targets(game, attackers = null, target_space = null) {
 		let pieces = attackers || game.attack?.pieces || []
 		let s = target_space || game.attack?.space
@@ -1068,6 +1091,30 @@ module.exports = function (Engine) {
 		return game.active === CP && game.attack?.jihad_offensive_negate === true && has_jihad_offensive_attackers(game, attackers)
 	}
 
+	function can_offer_yildrim_offensive_trench_negate(game, attackers = null, target_space = null) {
+		if (game.active !== CP) return false
+		if (!is_yildrim_offensive_active(game)) return false
+		if (is_yildrim_offensive_trench_used(game)) return false
+		if (!has_yildrim_offensive_attackers(game, attackers)) return false
+		let s = target_space || game.attack?.space
+		if (!(s > 0)) return false
+		let factions = infer_attack_factions(game)
+		let defenders = get_combat_defenders(game, s, factions.defender)
+		return get_defender_trench_level(game, s, factions.defender, defenders) > 0
+	}
+
+	function use_yildrim_offensive_trench_negate(game) {
+		if (!game.attack) return false
+		if (!can_offer_yildrim_offensive_trench_negate(game, game.attack.pieces, game.attack.space)) return false
+		game.attack.yildrim_offensive_trench_negate = true
+		set_yildrim_offensive_trench_used(game)
+		return true
+	}
+
+	function attacker_has_yildrim_offensive_trench_ignore(game, attackers = null) {
+		return game.active === CP && game.attack?.yildrim_offensive_trench_negate === true && has_yildrim_offensive_attackers(game, attackers)
+	}
+
 	function attacker_ignores_persistent_trench_effects(game, attackers = null, target_space = null) {
 		return (
 			attacker_has_massed_cavalry_desert_ignore(game, attackers) ||
@@ -1078,7 +1125,8 @@ module.exports = function (Engine) {
 	function attacker_ignores_trench_for_flank(game, attackers = null, target_space = null) {
 		return (
 			attacker_ignores_persistent_trench_effects(game, attackers, target_space) ||
-			attacker_has_jihad_offensive_trench_ignore(game, attackers)
+			attacker_has_jihad_offensive_trench_ignore(game, attackers) ||
+			attacker_has_yildrim_offensive_trench_ignore(game, attackers)
 		)
 	}
 
@@ -3884,13 +3932,15 @@ module.exports = function (Engine) {
 			}
 		}
 
-		if (is_turn_event(game, "yildrim_offensive") && game.active === CP) {
-			let has_yildrim = attackers.some((p) => data.pieces[p].symbol === "Y")
-			if (has_yildrim && game.events && game.events["yildrim_trench_used"] !== game.turn) {
-				ignore_trench = true
-				game.events["yildrim_trench_used"] = game.turn
-				log_detail(log, "耶尔德里姆攻势：取消战壕")
-			}
+		if (
+			game.active === CP &&
+			game.attack?.yildrim_offensive_trench_negate === true &&
+			is_yildrim_offensive_active(game) &&
+			has_yildrim_offensive_attackers(game, attackers)
+		) {
+			ignore_trench = true
+			set_yildrim_offensive_trench_used(game)
+			log_detail(log, "耶尔德里姆攻势：取消战壕")
 		}
 
 		// Tables
@@ -4100,7 +4150,7 @@ module.exports = function (Engine) {
 			let is_tu_attacking = attackers.some(
 				(p) => piece_counts_as_nation_for_rule(game, p, "tu") || piece_counts_as_nation_for_rule(game, p, "tua")
 			)
-			if (is_tu_attacking && is_turn_event(game, "yildrim_offensive")) {
+			if (is_tu_attacking && is_yildrim_offensive_active(game)) {
 				att_drm += 1
 				log_detail(log, "耶尔德里姆攻势：TU/TU-A攻击+1 DRM")
 			}
@@ -4911,6 +4961,10 @@ module.exports = function (Engine) {
 		is_jihad_offensive_active,
 		can_offer_jihad_offensive_negate,
 		use_jihad_offensive_negate,
+		set_yildrim_offensive_active,
+		is_yildrim_offensive_active,
+		can_offer_yildrim_offensive_trench_negate,
+		use_yildrim_offensive_trench_negate,
 		get_retreat_distance,
 		get_region_defender_candidates,
 		get_region_defense_stack_block_reason,
