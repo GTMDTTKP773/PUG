@@ -2572,7 +2572,7 @@ module.exports = function (Engine) {
 			name: "GREECE",
 			name_cn: "希腊",
 			effect_cn:
-				"——中立国参战——。(只有在希腊仍处于中立状态且在塞尔维亚至少存在1支英国/法国LCU时。或罗马尼亚已经加入战争且尚未崩溃时才能打出)。-1VP(获得中立地区格雅典的VP)。希腊加入协约国。",
+				"——中立国参战——。(只有在希腊仍处于中立状态且在巴尔干地区至少存在1支英国/法国LCU时。或罗马尼亚已经加入战争且尚未崩溃时才能打出)。-1VP(获得中立地区格雅典的VP)。希腊加入协约国。",
 			can_play: function (game) {
 				if (!can_play_neutral_entry_this_turn(game)) return false
 				const { neutral } = Engine
