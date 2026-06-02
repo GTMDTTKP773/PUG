@@ -319,7 +319,7 @@ module.exports = function (Engine) {
 					}
 				}
 			}
-			let in_space = helpers.find_space("Simla")
+			let in_space = helpers.find_space("INDIA")
 			helpers.reinforce(game, "Indian Mutiny #1", CP, in_space)
 			helpers.reinforce(game, "Indian Mutiny #2", CP, in_space)
 			helpers.reinforce(game, "Indian Mutiny #3", CP, in_space)
