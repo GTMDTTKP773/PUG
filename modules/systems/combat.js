@@ -965,6 +965,35 @@ module.exports = function (Engine) {
 		return event.turn === game.turn && event.action_round === game.action_round
 	}
 
+	function current_action_round_marker(game) {
+		return { turn: game.turn, action_round: game.action_round }
+	}
+
+	function marker_matches_current_action_round(game, event) {
+		if (event === true) return true
+		if (typeof event === "number") return event === game.turn
+		if (!event || typeof event !== "object") return false
+		return event.turn === game.turn && event.action_round === game.action_round
+	}
+
+	function set_jihad_offensive_active(game) {
+		if (!game.events) game.events = {}
+		game.events["jihad_offensive"] = current_action_round_marker(game)
+	}
+
+	function is_jihad_offensive_active(game) {
+		return marker_matches_current_action_round(game, game.events && game.events["jihad_offensive"])
+	}
+
+	function set_jihad_offensive_negate_used(game) {
+		if (!game.events) game.events = {}
+		game.events["jihad_offensive_used"] = current_action_round_marker(game)
+	}
+
+	function is_jihad_offensive_negate_used(game) {
+		return marker_matches_current_action_round(game, game.events && game.events["jihad_offensive_used"])
+	}
+
 	function has_russian_winter_offensive_weather_immunity(game, p, season) {
 		return (
 			season === "Winter" &&
@@ -999,14 +1028,44 @@ module.exports = function (Engine) {
 		return !!(s > 0 && data.spaces[s] && !data.spaces[s].vp)
 	}
 
-	function attacker_has_jihad_offensive_trench_ignore(game, attackers = null) {
+	function has_jihad_offensive_attackers(game, attackers = null) {
 		let pieces = attackers || game.attack?.pieces || []
-		return (
-			game.active === CP &&
-			is_turn_event(game, "jihad_offensive") &&
-			pieces.some((p) => ["tu", "tua"].includes(data.pieces[p]?.nation)) &&
-			(!game.events || game.events["jihad_offensive_used"] !== game.turn)
-		)
+		return pieces.some((p) => ["tu", "tua"].includes(data.pieces[p]?.nation))
+	}
+
+	function get_jihad_offensive_negate_targets(game, attackers = null, target_space = null) {
+		let pieces = attackers || game.attack?.pieces || []
+		let s = target_space || game.attack?.space
+		if (!(s > 0) || pieces.length === 0) return { trench: false, river: false }
+		let factions = infer_attack_factions(game)
+		let defender_faction = factions.defender
+		let defenders = get_combat_defenders(game, s, defender_faction)
+		return {
+			trench: get_defender_trench_level(game, s, defender_faction, defenders) > 0,
+			river: are_all_attackers_crossing_water(game, pieces, s)
+		}
+	}
+
+	function can_offer_jihad_offensive_negate(game, attackers = null, target_space = null) {
+		if (game.active !== CP) return false
+		if (!is_jihad_offensive_active(game)) return false
+		if (is_jihad_offensive_negate_used(game)) return false
+		if (!has_jihad_offensive_attackers(game, attackers)) return false
+		let targets = get_jihad_offensive_negate_targets(game, attackers, target_space)
+		return targets.trench || targets.river
+	}
+
+	function use_jihad_offensive_negate(game) {
+		if (!game.attack) return false
+		if (!can_offer_jihad_offensive_negate(game, game.attack.pieces, game.attack.space)) return false
+		game.attack.jihad_offensive_negate = true
+		set_jihad_offensive_negate_used(game)
+		mark_combat_card_effected(game, CC_CP_JIHAD_OFFENSIVE)
+		return true
+	}
+
+	function attacker_has_jihad_offensive_trench_ignore(game, attackers = null) {
+		return game.active === CP && game.attack?.jihad_offensive_negate === true && has_jihad_offensive_attackers(game, attackers)
 	}
 
 	function attacker_ignores_persistent_trench_effects(game, attackers = null, target_space = null) {
@@ -3999,17 +4058,15 @@ module.exports = function (Engine) {
 		// Handle Jihad Offensive event if applicable (even if not flanking, it might ignore trench/river for DRM)
 		if (
 			game.active === CP &&
-			is_turn_event(game, "jihad_offensive") &&
-			attackers.some((p) => ["tu", "tua"].includes(data.pieces[p].nation))
+			game.attack?.jihad_offensive_negate === true &&
+			is_jihad_offensive_active(game) &&
+			has_jihad_offensive_attackers(game, attackers)
 		) {
-			if (!game.events || game.events["jihad_offensive_used"] !== game.turn) {
-				if (!game.events) game.events = {}
-				game.events["jihad_offensive_used"] = game.turn
-				ignore_trench = true
-				jihad_ignore = true
-				mark_effected(CC_CP_JIHAD_OFFENSIVE)
-				log_detail(log, "圣战进攻：本次战斗忽略战壕和河流惩罚。")
-			}
+			set_jihad_offensive_negate_used(game)
+			ignore_trench = true
+			jihad_ignore = true
+			mark_effected(CC_CP_JIHAD_OFFENSIVE)
+			log_detail(log, "圣战进攻：本次战斗忽略战壕和河流惩罚。")
 		}
 
 		if (!attempt_flank) {
@@ -4047,7 +4104,11 @@ module.exports = function (Engine) {
 				att_drm += 1
 				log_detail(log, "耶尔德里姆攻势：TU/TU-A攻击+1 DRM")
 			}
-			if (is_tu_attacking && is_turn_event(game, "jihad_offensive")) {
+			if (
+				is_tu_attacking &&
+				is_jihad_offensive_active(game) &&
+				!combat_card_played(game, "attacker", CC_CP_JIHAD_OFFENSIVE)
+			) {
 				att_drm += 1
 				mark_effected(CC_CP_JIHAD_OFFENSIVE)
 				log_detail(log, "圣战攻势：TU/TU-A攻击+1 DRM")
@@ -4127,6 +4188,9 @@ module.exports = function (Engine) {
 					def_drm -= penalty
 					if (bonus !== 0 || penalty !== 0) {
 						mark_effected(c)
+						if (c === CC_CP_JIHAD_OFFENSIVE && bonus !== 0) {
+							log_detail(log, "圣战攻势CC：TU/TU-A攻击+1 DRM")
+						}
 					}
 				}
 			}
@@ -4843,6 +4907,10 @@ module.exports = function (Engine) {
 		clear_save_tiflis_state,
 		clear_catastrophic_attack_state,
 		is_advance_stop_terrain,
+		set_jihad_offensive_active,
+		is_jihad_offensive_active,
+		can_offer_jihad_offensive_negate,
+		use_jihad_offensive_negate,
 		get_retreat_distance,
 		get_region_defender_candidates,
 		get_region_defense_stack_block_reason,

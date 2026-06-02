@@ -762,6 +762,19 @@ exports.register = function (states, Engine, context) {
 
 	function continue_after_pre_flank_cc_step() {
 		game.active = game.attack?.attacker || game.active
+		if (
+			game.attack &&
+			game.attack.jihad_offensive_negate === undefined &&
+			combat.can_offer_jihad_offensive_negate(game, game.attack.pieces, game.attack.space)
+		) {
+			game.state = "jihad_offensive_negate"
+			return
+		}
+		continue_after_jihad_offensive_negate_choice()
+	}
+
+	function continue_after_jihad_offensive_negate_choice() {
+		game.active = game.attack?.attacker || game.active
 		if (combat.check_can_flank(game) && game.attack.flank_attempt === undefined) {
 			game.state = "choose_flank_attack"
 		} else {
@@ -2151,6 +2164,29 @@ exports.register = function (states, Engine, context) {
 			push_undo()
 			game.attack.flank_attempt = false
 			goto_pre_weather_step()
+		}
+	}
+
+	states.jihad_offensive_negate = {
+		inactive: "圣战攻势",
+		prompt(res) {
+			if (game.attack && game.attack.space !== -1) {
+				res.where(game.attack.space)
+				res.who(game.attack.pieces || [])
+			}
+			res.prompt("圣战攻势：是否取消本次战斗的战壕和河流惩罚？")
+			res.action("negate")
+			res.action("decline")
+		},
+		negate() {
+			push_undo()
+			if (!combat.use_jihad_offensive_negate(game)) game.attack.jihad_offensive_negate = false
+			continue_after_jihad_offensive_negate_choice()
+		},
+		decline() {
+			push_undo()
+			if (game.attack) game.attack.jihad_offensive_negate = false
+			continue_after_jihad_offensive_negate_choice()
 		}
 	}
 

@@ -5166,6 +5166,7 @@ const UI_ACTIONS = [
 	["choose_egypt", "选择埃及"],
 	["choose_russia", "选择俄国"],
 	["lose_vp", "失去 VP"],
+	["negate", "取消惩罚"],
 	["negate_one", "部分移除 (2 师)"],
 	["negate_all", "全部移除 (4 师)"],
 	["remove_ru_lcu", "移除俄国 LCU"],

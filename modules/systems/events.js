@@ -3805,7 +3805,7 @@ module.exports = function (Engine) {
 				return game.jihad >= 8
 			},
 			handler: function (game) {
-				game.events["jihad_offensive"] = game.turn
+				game.events["jihad_offensive"] = { turn: game.turn, action_round: game.action_round }
 			}
 		},
 		103: {

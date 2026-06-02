@@ -702,7 +702,7 @@ module.exports = function (Engine) {
 			windows: PRE_FLANK_ATTACKER_CC_WINDOWS,
 			can_play: can_play_jihad_offensive,
 			on_play_after_disposition(game, ctx) {
-				game.events["jihad_offensive"] = game.turn
+				combat.set_jihad_offensive_active(game)
 				ctx.mark_effected()
 			},
 			modifiers: {
