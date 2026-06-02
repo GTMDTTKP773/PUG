@@ -2578,8 +2578,8 @@ module.exports = function (Engine) {
 				const { neutral } = Engine
 				if (!neutral.is_greece_neutral(game)) return false
 
-				// Check for 1 BR/FR LCUs in Serbia
-				let br_fr_lcus_in_serbia = 0
+				// Check for 1 BR/FR LCUs in Balkans
+				let br_fr_lcus_in_balkans = 0
 				for (let p = 0; p < data.pieces.length; p++) {
 					let info = data.pieces[p]
 					if (
@@ -2588,12 +2588,12 @@ module.exports = function (Engine) {
 						game.pieces[p] > 0
 					) {
 						let s = game.pieces[p]
-						if (data.spaces[s].nation === "sb") {
-							br_fr_lcus_in_serbia++
+						if (is_balkans(s)) {
+							br_fr_lcus_in_balkans++
 						}
 					}
 				}
-				if (br_fr_lcus_in_serbia >= 1) return true
+				if (br_fr_lcus_in_balkans >= 1) return true
 
 				return Engine.collapse.is_romania_uncollapsed(game)
 			},
