@@ -911,6 +911,18 @@ function get_control_defaults_view() {
 	return view_defaults
 }
 
+function get_forts_view() {
+	const forts = game.forts || {}
+	const destroyed = Array.isArray(forts.destroyed) ? forts.destroyed.slice() : []
+	const destroyed_set = new Set(destroyed)
+	const besieged = Array.isArray(forts.besieged) ? forts.besieged.filter((s) => !destroyed_set.has(s)) : []
+	return {
+		...forts,
+		destroyed,
+		besieged
+	}
+}
+
 exports.view = function (state, current) {
 	const snapshot_log_length = Number.isInteger(state?.log) ? state.log : null
 	game = normalize_game(state)
@@ -1040,7 +1052,7 @@ exports.view = function (state, current) {
 					: [],
 			catastrophic_attack_oos_markers: get_catastrophic_attack_oos_marker_spaces(),
 			reduced: game.reduced,
-			forts: game.forts,
+			forts: get_forts_view(),
 			beachheads: game.beachheads,
 			unplaced_beachheads: Math.max(0, game.unplaced_beachheads || 0),
 			trenches: game.trenches,
