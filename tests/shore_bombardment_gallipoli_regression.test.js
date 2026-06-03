@@ -63,3 +63,33 @@ test("Shore Bombardment remains unavailable for inland battles", () => {
 	let view = rules.view(game, AP_ROLE)
 	expect(view.actions.play_cc || []).not.toContain(SHORE_BOMBARDMENT)
 })
+
+test("Shore Bombardment can be played at Basra when AP controls Basra and Fao", () => {
+	let basra = findSpace("Basra")
+	let fao = findSpace("Fao")
+	let game = createCcWindowGame({
+		attackerSpace: findSpace("Baghdad"),
+		defenderSpace: basra,
+		state: "play_cc_attacker"
+	})
+	game.control[basra] = AP
+	game.control[fao] = AP
+
+	let view = rules.view(game, AP_ROLE)
+	expect(view.actions.play_cc || []).toContain(SHORE_BOMBARDMENT)
+})
+
+test("Shore Bombardment cannot use Basra before AP controls Fao", () => {
+	let basra = findSpace("Basra")
+	let fao = findSpace("Fao")
+	let game = createCcWindowGame({
+		attackerSpace: findSpace("Baghdad"),
+		defenderSpace: basra,
+		state: "play_cc_attacker"
+	})
+	game.control[basra] = AP
+	game.control[fao] = CP
+
+	let view = rules.view(game, AP_ROLE)
+	expect(view.actions.play_cc || []).not.toContain(SHORE_BOMBARDMENT)
+})

@@ -687,6 +687,7 @@ exports.register = function (states, Engine, context) {
 		game.enver_attack_count = 0
 		game.british_mandate_violated = false
 		delete game.br_attack_penalty_paid
+		delete game.br_no_attack_activated
 		game.ge_to_tu_rp_used = 0
 		game.kitchener_conversion_used = false
 		game.entered_regions_this_turn = []

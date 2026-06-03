@@ -396,7 +396,11 @@ module.exports = function (Engine) {
 		if (game.mo_ap === MO_BRITISH_NO_ATTACK) {
 			if (check_british_participation(game, pieces) && !game.british_mandate_violated) {
 				game.british_mandate_violated = true
-				if (log && !game.br_attack_penalty_paid) log("AP violated British No Attack Mandate! (VP Penalty pending)")
+				if (!game.br_attack_penalty_paid) {
+					game.vp += 1
+					game.br_attack_penalty_paid = true
+					if (log) log("BR部队突破进攻限制：CP +1 VP")
+				}
 			}
 			return
 		}

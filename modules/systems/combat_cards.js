@@ -9,6 +9,8 @@ module.exports = function (Engine) {
 	const { is_removed, is_eliminated, get_piece_effective_faction, piece_counts_as_nation_for_rule } = game_utils
 
 	const STANDARD_CC_STATES = new Set(["play_cc_attacker", "play_cc_defender"])
+	const BASRA = Engine.game_utils.find_space("Basra")
+	const FAO = Engine.game_utils.find_space("Fao")
 	const SINAI_SPACES = new Set([
 		"Romani",
 		"Bir el Abd",
@@ -102,8 +104,11 @@ module.exports = function (Engine) {
 		return SINAI_SPACES.has(name)
 	}
 
-	function is_shore_bombardment_space(s) {
+	function is_shore_bombardment_space(game, s) {
 		if (!(s > 0 && data.spaces[s])) return false
+		if (s === BASRA) {
+			return map.is_controlled_by(game, BASRA, AP) && map.is_controlled_by(game, FAO, AP)
+		}
 		return SHORE_SPACES.has(data.spaces[s].name) || map.is_gallipoli(s)
 	}
 
@@ -214,11 +219,11 @@ module.exports = function (Engine) {
 
 	function can_play_shore_bombardment(game) {
 		if (!can_play_in_standard_cc_window(game)) return false
-		if (is_shore_bombardment_space(game.attack.space)) return true
+		if (is_shore_bombardment_space(game, game.attack.space)) return true
 
 		for (let p of get_attack_pieces(game)) {
 			let s = game.pieces[p]
-			if (is_shore_bombardment_space(s)) return true
+			if (is_shore_bombardment_space(game, s)) return true
 		}
 
 		return false

@@ -2309,6 +2309,7 @@ function build_attack_eligibility_cache_key() {
 	let attacked_spaces_hash = hash_number_array(game.attacked_spaces)
 	let activated_attack_hash = hash_number_array(game.activated && game.activated.attack)
 	let activated_attack_egypt_hash = hash_number_array(game.activated && game.activated.attack_egypt)
+	let br_no_attack_hash = `${game.mo_ap === MO_BRITISH_NO_ATTACK ? 1 : 0}:${game.br_attack_penalty_paid ? 1 : 0}:${hash_number_array(game.br_no_attack_activated)}`
 	let region_attack_hash = hash_region_attack_activations()
 	let retreated_hash = hash_number_array(game.retreated)
 
@@ -2330,7 +2331,7 @@ function build_attack_eligibility_cache_key() {
 	let events_hash = hash_events_flags(game.events)
 	let faction_bit = game.active === AP || game.active === "AP" || game.active === "Allied Powers" ? 1 : 2
 
-	return `${faction_bit}|${pieces_hash}|${attacked_hash}|${attacked_spaces_hash}|${activated_attack_hash}|${activated_attack_egypt_hash}|${region_attack_hash}|${retreated_hash}|${fort_hash}|${events_hash}`
+	return `${faction_bit}|${pieces_hash}|${attacked_hash}|${attacked_spaces_hash}|${activated_attack_hash}|${activated_attack_egypt_hash}|${br_no_attack_hash}|${region_attack_hash}|${retreated_hash}|${fort_hash}|${events_hash}`
 }
 
 function build_enemy_space_flag(faction) {
@@ -2376,6 +2377,13 @@ function has_attack_targets(p, faction, enemy, enemy_space_flag = null) {
 	return false
 }
 
+function can_select_piece_under_british_no_attack(p, s, faction) {
+	if (!mo.is_british_no_attack_unpaid(game, faction)) return true
+	let nations = Engine.game_utils.get_piece_nations_for_rule(game, p, "activation")
+	if (!nations.some((n) => n === "br")) return true
+	return Array.isArray(game.br_no_attack_activated) && set_has(game.br_no_attack_activated, s)
+}
+
 function refresh_attack_eligibility() {
 	game.eligible_attackers = []
 	let has_egypt_attack = Array.isArray(game.activated?.attack_egypt) && game.activated.attack_egypt.length > 0
@@ -2416,6 +2424,7 @@ function refresh_attack_eligibility() {
 				is_active_piece = false
 			}
 			if (is_active_piece && (is_lcu(p) || is_scu(p))) {
+				if (!can_select_piece_under_british_no_attack(p, s, faction)) continue
 				if (
 					has_attack_targets(p, faction, enemy, enemy_space_flag) &&
 					can_select_piece_in_space_for_attack(p, s, faction) &&
@@ -2656,6 +2665,7 @@ function start_ops_from_event(card_index) {
 	game.ops = info.ops
 	game.card_ops = info.ops
 	game.activated = { move: [], attack: [], attack_egypt: [] }
+	game.br_no_attack_activated = []
 	game.activation_cost = {}
 	game.moved = []
 	game.attacked = []

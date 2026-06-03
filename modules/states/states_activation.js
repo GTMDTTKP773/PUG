@@ -1195,19 +1195,17 @@ exports.register = function (states, Engine, context) {
 			if (game.ops === 0) states.activate_spaces.done()
 		},
 		activate_attack_with_br(s) {
-			// MO_BRITISH_NO_ATTACK: activate attack including BR units, pay +1 VP penalty once per turn
+			// MO_BRITISH_NO_ATTACK: mark this attack activation as allowed to include BR units.
+			// The VP penalty is paid only when a BR attack is actually declared.
 			if (!is_british_no_attack_unpaid_for(active_faction())) return
 			if (Engine.map.is_region(game, s)) return  // region activation handled separately
 			let cost = get_activation_cost(game, s, "attack_with_br")
 			if (cost === undefined || game.ops < cost) return
 			push_undo()
-			// Pay the VP penalty (once per turn)
-			game.vp += 1
-			game.br_attack_penalty_paid = true
-			game.british_mandate_violated = true
-			log("BR部队突破进攻限制：CP +1 VP")
 			game.ops -= cost
 			set_add(game.activated.attack, s)
+			if (!Array.isArray(game.br_no_attack_activated)) game.br_no_attack_activated = []
+			set_add(game.br_no_attack_activated, s)
 			if (!game.activation_cost) game.activation_cost = {}
 			map_set(game.activation_cost, s, cost)
 			if (game.ops === 0) states.activate_spaces.done()
@@ -1234,6 +1232,7 @@ exports.register = function (states, Engine, context) {
 				set_delete(game.activated.move, s)
 				set_delete(game.activated.attack, s)
 				set_delete(game.activated.attack_egypt, s)
+				if (Array.isArray(game.br_no_attack_activated)) set_delete(game.br_no_attack_activated, s)
 				game.ops += ordinary_cost
 				map_delete(game.activation_cost, s)
 			}
