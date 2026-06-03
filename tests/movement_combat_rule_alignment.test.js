@@ -78,6 +78,44 @@ test("LCUs attacking out of desert must use a supplied rail edge", () => {
 	expect(targets).not.toContain(tikrit)
 })
 
+test("BR LCU in Gaza can attack Beersheba along the completed Sinai rail", () => {
+	let game = setupGame(2026060301, "Historical", { no_supply_warnings: true })
+	let gaza = findSpace("Gaza")
+	let beersheba = findSpace("Beersheba")
+	let elArish = findSpace("El Arish")
+	let romani = findSpace("Romani")
+	let ismailia = findSpace("Ismailia")
+	let brCorps = findPiece(AP, "BR IX Corps")
+	let brDiv1 = findPiece(AP, "BR DIV #1")
+	let brDiv2 = findPiece(AP, "BR DIV #2")
+	let tuCorps = findPiece(CP, "TU III Corps")
+
+	resetForRuleProbe(game, AP)
+	game.state = "attack"
+	game.events.xinai = true
+	Engine.map.destroy_fort(game, gaza)
+	for (let s of [ismailia, romani, elArish, gaza]) Engine.set_control(game, s, AP)
+	Engine.set_control(game, beersheba, CP)
+	game.pieces[brCorps] = gaza
+	game.pieces[brDiv1] = gaza
+	game.pieces[brDiv2] = gaza
+	game.pieces[tuCorps] = beersheba
+	game.activated.attack = [gaza]
+	game.attack = { pieces: [], space: -1 }
+
+	let initialView = rules.view(game, AP_ROLE)
+	expect(initialView.actions.piece).toContain(brCorps)
+
+	game = rules.action(game, AP_ROLE, "piece", brDiv1)
+	game = rules.action(game, AP_ROLE, "piece", brDiv2)
+	let selectedScuView = rules.view(game, AP_ROLE)
+	expect(selectedScuView.actions.piece).toContain(brCorps)
+
+	game = rules.action(game, AP_ROLE, "piece", brCorps)
+	let selectedStackView = rules.view(game, AP_ROLE)
+	expect(selectedStackView.actions.space).toContain(beersheba)
+})
+
 test("Kut to The Hai does not apply the reverse-direction river crossing penalty", () => {
 	let game = setupGame(2026052802, "Historical", { no_supply_warnings: true })
 	let kut = findSpace("Kut")

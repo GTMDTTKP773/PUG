@@ -24,7 +24,7 @@ const {
 	is_besieged,
 	check_supply,
 	is_in_supply,
-	is_rail_connected_to_supply
+	is_rail_connected_to_supply: map_is_rail_connected_to_supply
 } = Engine.map
 const {
 	set_add,
@@ -732,6 +732,43 @@ exports.action = function (state, current, action, arg) {
 	game.cache_revision = (Number(game.cache_revision) || 0) + 1
 	return game
 }
+
+/**
+ * Read-only bounded tactical query for external AI clients.
+ *
+ * Normal game flow does not call this helper. Each candidate action runs on a
+ * cloned state because rules.action() may mutate its input.
+ */
+function analyze_supply_cut_actions(state, current, actions) {
+	let role = short_faction(current) || short_faction(state.active)
+	return Engine.analysis.probe_standard_supply_cut_actions(
+		state,
+		role,
+		actions,
+		(candidate, candidate_role, action, arg) => exports.action(candidate, candidate_role, action, arg)
+	)
+}
+
+function simulate_action_sequence(state, actions) {
+	return Engine.analysis.simulate_action_sequence(
+		state,
+		actions,
+		(candidate, candidate_role, action, arg) => exports.action(candidate, candidate_role, action, arg),
+		(candidate, candidate_role, action, arg) => {
+			let legal_actions = exports.view(candidate, candidate_role).actions || {}
+			let options = legal_actions[action]
+			if (Array.isArray(options)) return options.includes(arg)
+			return options === 1 && (arg === null || arg === undefined)
+		}
+	)
+}
+
+exports.analysis = Object.freeze({
+	version: Engine.analysis.version,
+	capabilities: Engine.analysis.capabilities,
+	probe_supply_cut_actions: analyze_supply_cut_actions,
+	simulate_action_sequence
+})
 
 exports.resign = function (state, current) {
 	game = normalize_game(state)
@@ -2191,6 +2228,10 @@ function contains_friendly(s) {
 
 function get_activation_cost(s, activation_type) {
 	return Engine.map.get_activation_cost(game, s, activation_type)
+}
+
+function is_rail_connected_to_supply(s, faction) {
+	return map_is_rail_connected_to_supply(game, s, faction)
 }
 
 const ATTACK_ELIGIBILITY_FORT_SPACES = data.spaces

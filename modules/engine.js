@@ -388,5 +388,8 @@ Engine.event_states = require("./states/event_states.js")(Engine)
 Engine.combat_cards = require("./systems/combat_cards.js")(Engine)
 Engine.jihad = require("./systems/jihad.js")(Engine)
 Engine.units = Engine.game_utils
+// Optional read-only helpers for external AI clients. Normal game flow does
+// not call this module.
+Engine.analysis = require("./analysis/index.js")(Engine)
 
 module.exports = Engine
