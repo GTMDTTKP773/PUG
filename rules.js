@@ -763,11 +763,35 @@ function simulate_action_sequence(state, actions) {
 	)
 }
 
+function analysis_decision_snapshot(state, current) {
+	let role = short_faction(current) || short_faction(state.active)
+	return Engine.analysis.decision_snapshot(
+		state,
+		role,
+		(candidate, candidate_role) => exports.view(candidate, candidate_role)
+	)
+}
+
+function step_decision(state, current, action, options) {
+	let role = short_faction(current) || short_faction(state.active)
+	return Engine.analysis.step_decision(
+		state,
+		role,
+		action,
+		(candidate, candidate_role) => exports.view(candidate, candidate_role),
+		(candidate, candidate_role, action_name, action_arg) =>
+			exports.action(candidate, candidate_role, action_name, action_arg),
+		options
+	)
+}
+
 exports.analysis = Object.freeze({
 	version: Engine.analysis.version,
 	capabilities: Engine.analysis.capabilities,
+	decision_snapshot: analysis_decision_snapshot,
 	probe_supply_cut_actions: analyze_supply_cut_actions,
-	simulate_action_sequence
+	simulate_action_sequence,
+	step_decision
 })
 
 exports.resign = function (state, current) {

@@ -8,9 +8,15 @@
  */
 module.exports = function create_analysis(Engine) {
 	return Object.freeze({
-		version: 1,
-		capabilities: Object.freeze(["action_sequence.simulate", "supply_cut.standard_one_step_regular"]),
+		version: 2,
+		capabilities: Object.freeze([
+			"action_sequence.simulate",
+			"decision.snapshot",
+			"decision.step",
+			"supply_cut.standard_one_step_regular"
+		]),
 		...require("./action_sequence.js")(),
+		...require("./decision.js")(),
 		...require("./supply_probe.js")(Engine)
 	})
 }

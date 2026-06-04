@@ -38,14 +38,48 @@ function createCaucasusActionFixture() {
 }
 
 test("rules exposes a versioned optional analysis namespace", () => {
-	expect(rules.analysis.version).toBe(1)
+	expect(rules.analysis.version).toBe(2)
 	expect(rules.analysis.capabilities).toContain("action_sequence.simulate")
+	expect(rules.analysis.capabilities).toContain("decision.snapshot")
+	expect(rules.analysis.capabilities).toContain("decision.step")
 	expect(rules.analysis.capabilities).toContain("supply_cut.standard_one_step_regular")
+	expect(rules.analysis.decision_snapshot).toBeTypeOf("function")
 	expect(rules.analysis.probe_supply_cut_actions).toBeTypeOf("function")
+	expect(rules.analysis.step_decision).toBeTypeOf("function")
+})
+
+test("rules AI decision snapshot separates legal actions from search candidates", () => {
+	let game = setupGame(2026060300)
+	let before = JSON.stringify(game)
+
+	let snapshot = rules.analysis.decision_snapshot(game, CP)
+
+	expect(snapshot.legal_actions).toContainEqual(["flag_supply_warnings", null])
+	expect(snapshot.legal_actions.some(([name]) => name === "undo")).toBe(false)
+	expect(snapshot.candidates.some(([name]) => name === "card")).toBe(true)
+	expect(snapshot.candidates.some(([name]) => name === "undo")).toBe(false)
+	expect(snapshot.candidates.some(([name]) => name === "flag_supply_warnings")).toBe(false)
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI decision step is read-only and folds deterministic browser flow", () => {
+	let game = setupGame(2026060301)
+	let before = JSON.stringify(game)
+
+	let result = rules.analysis.step_decision(game, CP, ["card", 56])
+
+	expect(result.sequence).toEqual([
+		["card", 56],
+		["next", null]
+	])
+	expect(result.game.state).toBe("play_card")
+	expect(result.game.active).toBe(AP)
+	expect(result.decision.candidates.some(([name]) => name === "play_event")).toBe(true)
+	expect(JSON.stringify(game)).toBe(before)
 })
 
 test("rules AI action sequence simulation is read-only and follows the next active role", () => {
-	let game = setupGame(2026060301)
+	let game = setupGame(2026060303)
 	let before = JSON.stringify(game)
 	let actions = [
 		["card", 56],
@@ -63,7 +97,7 @@ test("rules AI action sequence simulation is read-only and follows the next acti
 })
 
 test("rules AI action sequence rejects an illegal micro-action without mutating the source game", () => {
-	let game = setupGame(2026060302)
+	let game = setupGame(2026060304)
 	let before = JSON.stringify(game)
 
 	expect(() => rules.analysis.simulate_action_sequence(game, [["next", null]])).toThrow(
