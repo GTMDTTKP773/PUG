@@ -305,6 +305,12 @@ test("Jihad placement from German Intrigues resumes to the event placement state
 		state: "event_german_intrigues_persia_unit",
 		active: CP
 	})
+	expect(rules.view(game, CP_ROLE).actions.undo).toBe(1)
+
+	let undone = rules.action(JSON.parse(JSON.stringify(game)), CP_ROLE, "undo")
+	expect(undone.state).toBe("play_card")
+	expect(undone.active).toBe(CP)
+	expect(undone.jihad).toBe(0)
 
 	game = rules.action(game, CP_ROLE, "done")
 

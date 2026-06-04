@@ -38,12 +38,15 @@ function createCaucasusActionFixture() {
 }
 
 test("rules exposes a versioned optional analysis namespace", () => {
-	expect(rules.analysis.version).toBe(2)
+	expect(rules.analysis.version).toBe(4)
 	expect(rules.analysis.capabilities).toContain("action_sequence.simulate")
 	expect(rules.analysis.capabilities).toContain("decision.snapshot")
 	expect(rules.analysis.capabilities).toContain("decision.step")
+	expect(rules.analysis.capabilities).toContain("position.public")
+	expect(rules.analysis.capabilities).toContain("position.public.v2")
 	expect(rules.analysis.capabilities).toContain("supply_cut.standard_one_step_regular")
 	expect(rules.analysis.decision_snapshot).toBeTypeOf("function")
+	expect(rules.analysis.public_position).toBeTypeOf("function")
 	expect(rules.analysis.probe_supply_cut_actions).toBeTypeOf("function")
 	expect(rules.analysis.step_decision).toBeTypeOf("function")
 })
@@ -183,5 +186,36 @@ test("rules AI supply probe allows Movement transit but rejects stopping at the 
 	expect(stop.safe).toHaveLength(0)
 	expect(stop.unsafe).toHaveLength(1)
 	expect(stop.unsafe[0].reason).toBe("reply_cut")
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI public position is read-only and summarizes per-space facts", () => {
+	let fixture = createCaucasusFixture()
+	let { game, akstafa, ru, tu } = fixture
+	let before = JSON.stringify(game)
+
+	let position = rules.analysis.public_position(game)
+	let akstafa_row = position.spaces.find((space) => space.raw_id === akstafa)
+	let ru_piece = position.pieces.find((piece) => piece.id === ru)
+
+	expect(position.schema).toBe("pug-ai.public_position.v2")
+	expect(position.spaces).toHaveLength(301)
+	expect(akstafa_row.control).toBe(AP)
+	expect(akstafa_row.pieces).toContain(ru)
+	expect(akstafa_row.counts.ap.scu + akstafa_row.counts.ap.lcu).toBeGreaterThan(0)
+	expect(akstafa_row.counts.ap.cf).toBeGreaterThan(0)
+	expect(akstafa_row.counts.ap.lf).toBeGreaterThan(0)
+	expect(ru_piece).toMatchObject({
+		id: ru,
+		raw_id: akstafa,
+		effective_faction: AP,
+		regular: true,
+		scu: true
+	})
+	expect(ru_piece.cf).toBeGreaterThanOrEqual(0)
+	expect(ru_piece.lf).toBeGreaterThan(0)
+	expect(ru_piece.mf).toBeGreaterThan(0)
+	expect(position.spaces.some((space) => space.pieces.includes(tu))).toBe(true)
+	expect(position.spaces.some((space) => space.raw_id === 90)).toBe(false)
 	expect(JSON.stringify(game)).toBe(before)
 })

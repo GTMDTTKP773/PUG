@@ -753,10 +753,9 @@ module.exports = function (Engine) {
 		return null
 	}
 
-	function is_prohibited_to_non_indian_units(space) {
-		// Rule 20.2.3 & Glossary: India Entry Restrictions.
-		// Rule 9.8.3: Restricted Area LCU Limit (1/2/3 based on War Commitment).
-		return is_india(space)
+	function is_prohibited_to_russian_units(space) {
+		// Rule 20.2.3: RU units may never enter India or Baluchistan.
+		return is_india(space) || is_baluchistan(space)
 	}
 
 	// --- Control Logic ---
@@ -850,7 +849,7 @@ module.exports = function (Engine) {
 
 	function destroy_fort(game, s) {
 		if (!game.forts) game.forts = { destroyed: [], besieged: [] }
-		if (!Array.isArray(game.forts.destroyed)) game.forts.destroyed = []
+		if (!game.forts.destroyed) game.forts.destroyed = []
 		if (!Array.isArray(game.forts.besieged)) game.forts.besieged = []
 		if (!set_has(game.forts.destroyed, s)) {
 			set_add(game.forts.destroyed, s)
@@ -1553,9 +1552,7 @@ module.exports = function (Engine) {
 			}
 		}
 
-		if (is_prohibited_to_non_indian_units(s)) {
-			if (!piece_counts_as_nation_for_rule(game, p, "in")) return false
-		}
+		if (is_prohibited_to_russian_units(s) && piece_counts_as_nation_for_rule(game, p, "ru")) return false
 
 		// Rule 19.6.1: Persian Neutrality / Secret Treaty.
 		if (area === "persia" && !is_afghanistan(s)) {

@@ -15,6 +15,8 @@ Available capabilities:
 action_sequence.simulate
 decision.snapshot
 decision.step
+position.public
+position.public.v2
 supply_cut.standard_one_step_regular
 ```
 
@@ -31,6 +33,14 @@ the former as a policy mask and the latter as a search surface.
 `rules.analysis.step_decision(game, role, action)` clones a game, validates an
 AI candidate action, applies it, and advances committed confirmations or
 single-candidate browser flow until the next real decision.
+
+`rules.analysis.public_position(game)` clones and normalizes the source state,
+refreshes supply on that clone when needed, and returns public per-space facts:
+control, piece ids, AP/CP/neutral unit-count buckets, current combat/loss/move
+factor totals, supply degradation counts, fort siege/destruction flags, and
+beachhead flags. It also returns public on-map piece summaries with current
+faction, reduced/supply/moved flags, and current factors. It does not expose
+hands or legal actions.
 
 `rules.analysis.probe_supply_cut_actions(game, role, actions)` probes standard
 Movement stops, dropped units, and standard SR destinations against an

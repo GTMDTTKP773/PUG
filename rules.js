@@ -710,6 +710,7 @@ exports.action = function (state, current, action, arg) {
 
 	set_state_globals()
 	normalize_transient_state()
+	const active_before_action = short_faction(game.active)
 	const supply_dependency_before = get_supply_dependency_signature()
 	const state_handlers = states[game.state]
 	if (state_handlers && action in state_handlers) {
@@ -726,6 +727,14 @@ exports.action = function (state, current, action, arg) {
 		else throw new Error("Invalid action: " + action)
 	}
 	normalize_transient_state()
+	const active_after_action = short_faction(game.active)
+	if (
+		(active_before_action === AP || active_before_action === CP) &&
+		(active_after_action === AP || active_after_action === CP) &&
+		active_before_action !== active_after_action
+	) {
+		clear_undo()
+	}
 	if (game.seed !== seed_before) clear_undo()
 	// Only map/supply-relevant state changes need a fresh global supply pass.
 	set_supply_dirty_if_needed(supply_dependency_before)
@@ -785,10 +794,18 @@ function step_decision(state, current, action, options) {
 	)
 }
 
+function analysis_public_position(state) {
+	let candidate = JSON.parse(JSON.stringify(state))
+	game = normalize_game(candidate)
+	update_supply_if_missing()
+	return Engine.analysis.public_position(game)
+}
+
 exports.analysis = Object.freeze({
 	version: Engine.analysis.version,
 	capabilities: Engine.analysis.capabilities,
 	decision_snapshot: analysis_decision_snapshot,
+	public_position: analysis_public_position,
 	probe_supply_cut_actions: analyze_supply_cut_actions,
 	simulate_action_sequence,
 	step_decision
@@ -1898,10 +1915,14 @@ const UNDO_BLOCKED_STATES = new Set([
 ])
 
 function can_offer_undo() {
+	if (!(game.undo && game.undo.length > 0 && !UNDO_BLOCKED_STATES.has(game.state))) return false
+	let top = game.undo[game.undo.length - 1]
+	let current = short_faction(game.active)
+	let owner = top ? short_faction(top.active) : null
 	return !!(
-		game.undo &&
-		game.undo.length > 0 &&
-		!UNDO_BLOCKED_STATES.has(game.state)
+		!(owner === AP || owner === CP) ||
+		!(current === AP || current === CP) ||
+		owner === current
 	)
 }
 

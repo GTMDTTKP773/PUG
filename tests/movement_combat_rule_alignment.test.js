@@ -330,6 +330,38 @@ test("Afghan Uprising units may attack adjacent India after Afghan Alliance", ()
 	expect(getAttackTargets(game, [afghan], CP)).toContain(india)
 })
 
+test("CP regular units may enter India while RU units may not enter India or Baluchistan", () => {
+	let game = setupGame(2026060401, "Historical", { no_supply_warnings: true })
+	let afghanistan = findSpace("Afghanistan")
+	let india = findSpace("INDIA")
+	let baluchistan = findSpace("Baluchistan")
+	let turkish = findPiece(CP, "TU DIV #1")
+	let russian = findPiece(AP, "RU DIV #1")
+
+	resetForRuleProbe(game, CP)
+	game.events.afghan_alliance = true
+	game.pieces[turkish] = afghanistan
+	game.pieces[russian] = afghanistan
+	Engine.set_control(game, afghanistan, CP)
+	Engine.set_control(game, india, CP)
+	Engine.set_control(game, baluchistan, AP)
+	game.activated.move = [afghanistan]
+	game.move = {
+		initial: afghanistan,
+		current: afghanistan,
+		spaces_moved: 0,
+		pieces: [turkish],
+		touched_spaces: [afghanistan],
+		faction: CP
+	}
+
+	expect(Engine.map.can_enter_area(game, turkish, india)).toBe(true)
+	expect(Engine.map.get_piece_connected_spaces_for_rule(game, afghanistan, turkish, "move")).toContain(india)
+	expect(Engine.map.can_piece_move_to(game, turkish, india, CP)).toBe(true)
+	expect(Engine.map.can_enter_area(game, russian, india)).toBe(false)
+	expect(Engine.map.can_enter_area(game, russian, baluchistan)).toBe(false)
+})
+
 test("Central Asian Uprising does not trigger tribe range end-move blocking", () => {
 	let game = setupGame(2026052306, "Historical", { no_supply_warnings: true })
 	let centralAsia = findSpace("Central Asia")

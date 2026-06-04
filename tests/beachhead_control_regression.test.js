@@ -595,6 +595,32 @@ test("AP movement from a non-Balkan beachhead to its island base adds Jihad when
 	expect(Engine.game_utils.is_permanently_eliminated(game, brDiv)).toBe(false)
 })
 
+test("CP cannot undo back into an AP action after AP-triggered Jihad placement", () => {
+	let game = setupGame(2026042222, "Historical", { no_supply_warnings: true })
+	let besikaBay = findSpace("Besika Bay")
+	let lemnos = findSpace("Lemnos")
+	let brDiv = findPiece(AP, "BR DIV #4")
+
+	clearBoard(game)
+	game.beachheads = [besikaBay]
+	game.jihad = 0
+	setupSinglePieceBeachheadMove(game, brDiv, besikaBay)
+
+	game = rules.action(game, AP_ROLE, "space", lemnos)
+
+	expect(game.state).toBe("jihad_placement")
+	expect(game.active).toBe(CP)
+	expect(game.undo || []).toHaveLength(0)
+	expect(rules.view(game, CP_ROLE).actions.undo).toBe(0)
+
+	game = rules.action(game, CP_ROLE, "undo")
+
+	expect(game.state).toBe("jihad_placement")
+	expect(game.active).toBe(CP)
+	expect(game.pieces[brDiv]).toBe(lemnos)
+	expect(game.jihad).toBe(1)
+})
+
 test("AP movement back to an island base does not add Jihad while another unit still draws sole supply through that beachhead", () => {
 	let game = setupGame(2026042216, "Historical", { no_supply_warnings: true })
 	let besikaBay = findSpace("Besika Bay")
