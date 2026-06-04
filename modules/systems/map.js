@@ -849,11 +849,13 @@ module.exports = function (Engine) {
 	}
 
 	function destroy_fort(game, s) {
-		if (!game.forts) game.forts = { destroyed: [] }
-		if (!game.forts.destroyed) game.forts.destroyed = []
+		if (!game.forts) game.forts = { destroyed: [], besieged: [] }
+		if (!Array.isArray(game.forts.destroyed)) game.forts.destroyed = []
+		if (!Array.isArray(game.forts.besieged)) game.forts.besieged = []
 		if (!set_has(game.forts.destroyed, s)) {
 			set_add(game.forts.destroyed, s)
 		}
+		set_delete(game.forts.besieged, s)
 	}
 
 	// --- Connection Logic ---
