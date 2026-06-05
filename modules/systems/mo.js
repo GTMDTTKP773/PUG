@@ -18,7 +18,7 @@ module.exports = function (Engine) {
 		is_caucasus,
 		is_syria_palestine,
 		is_mesopotamia,
-		is_persia,
+		is_greater_persia,
 		is_afghanistan,
 		is_central_asia,
 		is_india,
@@ -253,7 +253,7 @@ module.exports = function (Engine) {
 	function is_ap_eastern_mo_space(space) {
 		return (
 			is_mesopotamia(space) ||
-			is_persia(space) ||
+			is_greater_persia(space) ||
 			is_afghanistan(space) ||
 			is_central_asia(space) ||
 			is_india(space) ||
