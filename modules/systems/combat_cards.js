@@ -19,7 +19,7 @@ module.exports = function (Engine) {
 		"Magdhaba",
 		"Bir Gifgafa",
 		"Bir Hasana",
-		"Nekhl",
+		"Nekhi",
 		"Suez",
 		"Aqaba"
 	])
@@ -37,6 +37,9 @@ module.exports = function (Engine) {
 		"Ismailia",
 		"Suez",
 		"Aqaba",
+		"Romani",
+		"Jifjaffa",
+		"Nekhi",
 		"Jiddah",
 		"Bahrain",
 		"Abadan",
@@ -219,14 +222,7 @@ module.exports = function (Engine) {
 
 	function can_play_shore_bombardment(game) {
 		if (!can_play_in_standard_cc_window(game)) return false
-		if (is_shore_bombardment_space(game, game.attack.space)) return true
-
-		for (let p of get_attack_pieces(game)) {
-			let s = game.pieces[p]
-			if (is_shore_bombardment_space(game, s)) return true
-		}
-
-		return false
+		return is_shore_bombardment_space(game, game.attack.space)
 	}
 
 	function can_play_armenian_druzhiny(game) {
@@ -582,7 +578,11 @@ module.exports = function (Engine) {
 		[combat.CC_AP_SHORE_BOMBARDMENT]: {
 			windows: STANDARD_CC_WINDOWS,
 			can_play: can_play_shore_bombardment,
-			modifiers: { drm: 1 }
+			modifiers: {
+				drm({ game }) {
+					return is_shore_bombardment_space(game, game.attack?.space) ? 1 : 0
+				}
+			}
 		},
 		[combat.CC_AP_ARMENIAN_DRUZHINY]: {
 			windows: STANDARD_CC_WINDOWS,
