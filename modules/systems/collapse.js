@@ -31,8 +31,8 @@ module.exports = function (Engine) {
 		Object.freeze({ name: "GE DIV #2", space: "CP Reserve" }),
 		Object.freeze({ name: "AH VIII Corps", space: "Galicia" }),
 		Object.freeze({ name: "AH XXII R Corps", space: "Galicia" }),
-		Object.freeze({ name: "AH DIV #4", space: "Galicia" }),
-		Object.freeze({ name: "AH DIV #5", space: "CP Reserve" })
+		Object.freeze({ name: "AH DIV #1", space: "Galicia" }),
+		Object.freeze({ name: "AH DIV #2", space: "CP Reserve" })
 	])
 	const BULGARIA_ENTRY_AP_PLACEMENTS = Object.freeze([
 		Object.freeze({ name: "SB 1 Army", space: "BELGRADE" }),
@@ -52,7 +52,7 @@ module.exports = function (Engine) {
 			placements: BULGARIA_ENTRY_CP_PLACEMENTS,
 			third_army_name: "BU 3 Army",
 			third_army_default_space: "Rustchuk",
-			ah_divisions: Object.freeze(["AH DIV #4", "AH DIV #5"])
+			ah_divisions: Object.freeze(["AH DIV #1", "AH DIV #2"])
 		}),
 		ap: Object.freeze({
 			placements: BULGARIA_ENTRY_AP_PLACEMENTS
@@ -92,12 +92,12 @@ module.exports = function (Engine) {
 			]),
 			combined_bu_ah_name: "Combined BU/AH Div",
 			combined_bu_ah_default_space: "CP Reserve",
-			ge_division_pool: Object.freeze(["GE DIV #3", "GE DIV #4"]),
-			ah_hermannstadt_pool: Object.freeze(["AH DIV #1", "AH DIV #2"]),
-			ah_reserve_pool: Object.freeze(["AH DIV #3"]),
+			ge_division_pool: Object.freeze(["GE DIV #2", "GE DIV #3"]),
+			ah_hermannstadt_pool: Object.freeze(["AH DIV #3", "AH DIV #4"]),
+			ah_reserve_pool: Object.freeze(["AH DIV #2"]),
 			delayed: Object.freeze([Object.freeze({ name: "GE Schmettow", turn_offset: 1, space: "Galicia" })]),
 			ge_units: Object.freeze(["GE IX Army", "GE Falkenhayn HQ", "GE Hvy Arty", "GE Schmettow"]),
-			ah_units: Object.freeze(["Combined BU/AH Div", "AH DIV #1", "AH DIV #2", "AH DIV #3"])
+			ah_units: Object.freeze(["Combined BU/AH Div", "AH DIV #2", "AH DIV #3", "AH DIV #4"])
 		})
 	})
 
@@ -124,11 +124,14 @@ module.exports = function (Engine) {
 		"GE DIV #1",
 		"GE DIV #2"
 	])
-	const ALL_AH_DIVISION_NAMES = Object.freeze(
+	const ENTRY_AH_DIVISION_NAMES = Object.freeze(
 		data.pieces
 			.filter(
 				(piece) =>
-					piece && piece.nation === "ah" && piece.piece_class === "SCU" && /^AH DIV #\d+$/.test(piece.name)
+					piece &&
+					piece.nation === "ah" &&
+					piece.piece_class === "SCU" &&
+					/^AH DIV #[1-4]$/.test(piece.name)
 			)
 			.map((piece) => piece.name)
 	)
@@ -136,7 +139,7 @@ module.exports = function (Engine) {
 	const ROMANIAN_COLLAPSE_AH_ENTRY_UNIT_NAMES = new Set(["AH VI R Corps", ...ROMANIA_ENTRY_PLAN.cp.ah_units])
 	const ROMANIAN_COLLAPSE_AH_DIVISION_NAMES = Object.freeze([
 		"Combined BU/AH Div",
-		...ALL_AH_DIVISION_NAMES
+		...ENTRY_AH_DIVISION_NAMES
 	])
 	// 两个崩溃事件的“可选保留/移除”名单并不相同：
 	// 塞尔维亚崩溃在罗马尼亚未崩溃时只从 Bulgaria 入场的 AH 师中选择 2 个移除；

@@ -261,6 +261,16 @@ module.exports = function (Engine) {
 	function get_piece_effective_faction_override(game, p) {
 		let info = data.pieces[p]
 		if (!info) return undefined
+		if (
+			game &&
+			game.events &&
+			game.events["romania"] &&
+			Engine.collapse &&
+			typeof Engine.collapse.is_romanian_entry_piece === "function" &&
+			Engine.collapse.is_romanian_entry_piece(info)
+		) {
+			return undefined
+		}
 		if (Engine.collapse && typeof Engine.collapse.is_bulgarian_entry_piece === "function") {
 			if (
 				Engine.collapse.is_bulgarian_entry_piece(info) &&

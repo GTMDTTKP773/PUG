@@ -122,8 +122,8 @@ describe("崩溃规则", () => {
 		game.events.bulgaria = true
 		game.events.romania = true
 		moveToReserve(game, CP, "AH DIV #1")
-		moveToReserve(game, CP, "AH DIV #4")
-		moveToReserve(game, CP, "AH DIV #5")
+		moveToReserve(game, CP, "AH DIV #2")
+		moveToReserve(game, CP, "AH DIV #3")
 		moveToReserve(game, CP, "AH VIII Corps")
 
 		Engine.collapse.accept_voluntary_collapse(game, "serbia", log)
@@ -135,14 +135,15 @@ describe("崩溃规则", () => {
 			rules: createStateRules(game)
 		})
 
-		expect(getPiecesAction(res)).not.toContain(findPiece(CP, "AH DIV #1"))
-		expect(getPiecesAction(res)).toContain(findPiece(CP, "AH DIV #4"))
-		expect(getPiecesAction(res)).toContain(findPiece(CP, "AH DIV #5"))
+		expect(getPiecesAction(res)).toContain(findPiece(CP, "AH DIV #1"))
+		expect(getPiecesAction(res)).toContain(findPiece(CP, "AH DIV #2"))
+		expect(getPiecesAction(res)).not.toContain(findPiece(CP, "AH DIV #3"))
+		expect(getPiecesAction(res)).not.toContain(findPiece(CP, "AH DIV #5"))
 		expect(getPiecesAction(res)).not.toContain(findPiece(CP, "AH DIV #6"))
 		expect(getPiecesAction(res)).not.toContain(findPiece(CP, "AH VIII Corps"))
 	})
 
-	test("塞尔维亚崩溃不会把 Romania 事件带入的 AH 单位列入移除选择", () => {
+	test("塞尔维亚崩溃只把 Bulgaria 入场 AH 师列入移除选择", () => {
 		const game = createGame()
 		const rules = createStateRules(game)
 
@@ -150,11 +151,11 @@ describe("崩溃规则", () => {
 		Engine.neutral.trigger_romania_entry(game)
 		Engine.collapse.accept_voluntary_collapse(game, "serbia", rules.log)
 
-		const romaniaAhUnits = ["AH VI R Corps", "AH DIV #1", "AH DIV #2", "AH DIV #3", "Combined BU/AH Div"].map((name) =>
+		const romaniaAhUnits = ["AH VI R Corps", "AH DIV #3", "AH DIV #4", "Combined BU/AH Div"].map((name) =>
 			findPiece(CP, name)
 		)
-		const ahDiv4 = findPiece(CP, "AH DIV #4")
-		const ahDiv5 = findPiece(CP, "AH DIV #5")
+		const ahDiv1 = findPiece(CP, "AH DIV #1")
+		const ahDiv2 = findPiece(CP, "AH DIV #2")
 		const res = Engine.create_result(game)
 
 		eventStates.event_serbian_collapse_choice.prompt({
@@ -167,17 +168,17 @@ describe("崩溃规则", () => {
 			expect(getPiecesAction(res)).not.toContain(p)
 			expect(isRemoved(game, p)).toBe(false)
 		}
-		expect(getPiecesAction(res)).toEqual(expect.arrayContaining([ahDiv4, ahDiv5]))
+		expect(getPiecesAction(res)).toEqual(expect.arrayContaining([ahDiv1, ahDiv2]))
 
-		eventStates.event_serbian_collapse_choice.piece({ game, rules, arg: ahDiv4 })
-		eventStates.event_serbian_collapse_choice.piece({ game, rules, arg: ahDiv5 })
+		eventStates.event_serbian_collapse_choice.piece({ game, rules, arg: ahDiv1 })
+		eventStates.event_serbian_collapse_choice.piece({ game, rules, arg: ahDiv2 })
 		eventStates.event_serbian_collapse_choice.confirm({ game, rules })
 
 		for (const p of romaniaAhUnits) {
 			expect(isRemoved(game, p)).toBe(false)
 		}
-		expect(isRemoved(game, ahDiv4)).toBe(true)
-		expect(isRemoved(game, ahDiv5)).toBe(true)
+		expect(isRemoved(game, ahDiv1)).toBe(true)
+		expect(isRemoved(game, ahDiv2)).toBe(true)
 	})
 
 	test("塞尔维亚崩溃不会把保加利亚单位永久消灭，但仍会移除保加利亚入场的 GE/AH 单位", () => {
@@ -217,8 +218,8 @@ describe("崩溃规则", () => {
 		const log = makeLogger(game)
 		const ah8 = placePiece(game, CP, "AH VIII Corps", "Galicia")
 		const ah22 = placePiece(game, CP, "AH XXII R Corps", "Galicia")
-		const ahDiv4 = moveToReserve(game, CP, "AH DIV #4")
-		const ahDiv5 = moveToReserve(game, CP, "AH DIV #5")
+		const ahDiv1 = moveToReserve(game, CP, "AH DIV #1")
+		const ahDiv2 = moveToReserve(game, CP, "AH DIV #2")
 
 		game.events.bulgaria = true
 		game.events.romania = true
@@ -227,8 +228,8 @@ describe("崩溃规则", () => {
 
 		expect(isRemoved(game, ah8)).toBe(true)
 		expect(isRemoved(game, ah22)).toBe(true)
-		expect(isRemoved(game, ahDiv4)).toBe(false)
-		expect(isRemoved(game, ahDiv5)).toBe(false)
+		expect(isRemoved(game, ahDiv1)).toBe(false)
+		expect(isRemoved(game, ahDiv2)).toBe(false)
 		expect(game.state).toBe("event_serbian_collapse_choice")
 	})
 
@@ -304,7 +305,7 @@ describe("崩溃规则", () => {
 		expect(getPiecesAction(res)).toContain(findPiece(CP, "Combined BU/AH Div"))
 		expect(getPiecesAction(res)).toContain(findPiece(CP, "AH DIV #3"))
 		expect(getPiecesAction(res)).toContain(findPiece(CP, "AH DIV #4"))
-		expect(getPiecesAction(res)).toContain(findPiece(CP, "AH DIV #5"))
+		expect(getPiecesAction(res)).not.toContain(findPiece(CP, "AH DIV #5"))
 		expect(getPiecesAction(res)).not.toContain(findPiece(CP, "AH DIV #6"))
 		expect(getPiecesAction(res)).not.toContain(findPiece(CP, "AH VI R Corps"))
 	})
@@ -413,8 +414,8 @@ describe("崩溃规则", () => {
 	test("塞尔维亚自愿崩溃可完成 offer->accept->移除->免费SR->done 全链路", () => {
 		const game = createGame()
 		const rules = createStateRules(game)
-		const ahDiv1 = moveToReserve(game, CP, "AH DIV #4")
-		const ahDiv2 = moveToReserve(game, CP, "AH DIV #5")
+		const ahDiv1 = moveToReserve(game, CP, "AH DIV #1")
+		const ahDiv2 = moveToReserve(game, CP, "AH DIV #2")
 		const srPiece = placePiece(game, CP, "German 11th Army", "SOFIA")
 		const destination = findSpace("BELGRADE")
 
