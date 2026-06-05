@@ -84,3 +84,25 @@ test("Stack-based attack activation can include Heavy Artillery only with combat
 		[heavy, army, corps].sort((a, b) => a - b)
 	)
 })
+
+test("Reduced Heavy Artillery contributes only +1 attack DRM", () => {
+	let game = setupGame(2026060601, "Historical", { no_supply_warnings: true })
+	let { hermannstadt, heavy, army } = prepareGaliciaAttack(game)
+	let logs = []
+
+	game.reduced = [heavy]
+	game.combat_cards = { attacker: [], defender: [] }
+	game.attack = {
+		space: hermannstadt,
+		pieces: [heavy, army],
+		attacker: CP,
+		defender: AP
+	}
+
+	Engine.combat.resolve_battle_sequence(game, { log: (msg) => logs.push(msg) })
+
+	expect(Engine.data.pieces[heavy].lf).toBe(2)
+	expect(Engine.data.pieces[heavy].rlf).toBe(1)
+	expect(game.battle_result.att_drm).toBe(1)
+	expect(logs).toContain("  进攻方重炮部队提供 +1 DRM")
+})
