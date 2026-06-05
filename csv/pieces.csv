@@ -191,7 +191,7 @@ id,faction,nation,name,cf,lf,mf,rcf,rlf,rmf,symbol,region_limit,type,badge,piece
 191,cp,ge,GE DIV #4,3,2,4,2,2,4,,B,regular,blue,SCU,GEDiv.png,GEDivR.png
 192,cp,ge,GE Falkenhayn HQ,0,1,4,0,0,4,,,hq,,SCU,GEFalkHQ.png,GEFalkHQR.png
 193,cp,ge,GE GeoProtect,1,1,0,0,1,0,dot,,regular,yellow,SCU,GEGEOP.png,GEGEOPR.png
-194,cp,ge,GE Hvy Arty,0,2,4,0,2,4,H,,,,SCU,GEHvArty.png,GEHvArtyR.png
+194,cp,ge,GE Hvy Arty,0,2,4,0,1,4,H,,,,SCU,GEHvArty.png,GEHvArtyR.png
 195,cp,ge,GE IV R Corps,3,3,4,2,3,4,,B,regular,infantry,LCU,GEIVRC.png,GEIVRCR.png
 196,cp,ge,GE IX Army,5,3,4,4,3,4,,B,regular,blue,LCU,GEIXA.png,GEIXAR.png
 197,cp,ge,GE Mackenson HQ,0,1,4,0,0,4,,,hq,,SCU,GEMackHQ.png,GEMackHQR.png
