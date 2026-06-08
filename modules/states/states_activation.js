@@ -676,7 +676,7 @@ exports.register = function (states, Engine, context) {
 	}
 
 	function get_region_activation_cost(mode, s, pieces) {
-		let costs = get_activation_cost_pair(game, s, pieces)
+		let costs = get_activation_cost_pair(game, s, pieces, get_activation_supply_cache())
 		return mode === "move" ? costs.move : costs.attack
 	}
 
@@ -971,6 +971,7 @@ exports.register = function (states, Engine, context) {
 			let activated_move_set = new Set(game.activated.move || [])
 			let activated_attack_set = new Set(game.activated.attack || [])
 			let activated_attack_egypt_set = new Set(game.activated.attack_egypt || [])
+			let activation_cost_cache = get_activation_supply_cache()
 			let enemy = other_faction(faction)
 			let enemy_space_flag = new Uint8Array(data.spaces.length)
 			for (let p = 0; p < game.pieces.length; p++) {
@@ -1004,7 +1005,9 @@ exports.register = function (states, Engine, context) {
 				let is_region_space = Engine.map.is_region(game, s)
 				if (!is_region_space && (activated_move_set.has(s) || activated_attack_set.has(s) || activated_attack_egypt_set.has(s))) continue
 
-				let costs = is_region_space ? { move: 1, attack: 1 } : get_activation_cost_pair(game, s, all_pieces_by_space.get(s))
+				let costs = is_region_space
+					? { move: 1, attack: 1 }
+					: get_activation_cost_pair(game, s, all_pieces_by_space.get(s), activation_cost_cache)
 				let move_cost = costs.move
 				let attack_cost = costs.attack
 				let unmoved_pieces = friendly_pieces.filter((p) => !set_has(game.moved, p))

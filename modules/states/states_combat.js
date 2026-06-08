@@ -1046,6 +1046,61 @@ exports.register = function (states, Engine, context) {
 		return combat_cards.get_army_of_islam_space_options(game)
 	}
 
+	function get_march_and_countermarch_piece_options() {
+		if (typeof combat_cards.get_march_and_countermarch_piece_options !== "function") return []
+		return combat_cards.get_march_and_countermarch_piece_options(game)
+	}
+
+	function get_march_and_countermarch_move_options() {
+		if (typeof combat_cards.get_march_and_countermarch_move_options !== "function") return []
+		return combat_cards.get_march_and_countermarch_move_options(game)
+	}
+
+	function cancel_march_and_countermarch() {
+		let undo_depth = game.march_and_countermarch?.undo_depth
+		if (!Number.isInteger(undo_depth)) undo_depth = Math.max(0, (game.undo?.length || 0) - 1)
+		let popped = false
+		while (typeof pop_undo === "function" && (game.undo?.length || 0) > undo_depth) {
+			pop_undo()
+			popped = true
+		}
+		if (!popped) {
+			let return_state = game.march_and_countermarch?.return_state || "play_cc_attacker"
+			let is_attacker = !!game.march_and_countermarch?.is_attacker
+			delete game.march_and_countermarch
+			resume_combat_card_flow(return_state, is_attacker)
+		}
+	}
+
+	function finish_march_and_countermarch_move() {
+		let march = game.march_and_countermarch
+		if (!march || !game.attack) return
+		let p = march.piece
+		if (!(p >= 0 && data.pieces[p])) return
+		if (game.pieces[p] !== game.attack.space) return
+
+		if (!game.attack.origin_by_piece || typeof game.attack.origin_by_piece !== "object") {
+			game.attack.origin_by_piece = {}
+		}
+		if (march.is_attacker) {
+			if (!(p in game.attack.origin_by_piece) && march.origin > 0) {
+				game.attack.origin_by_piece[p] = march.origin
+			}
+			set_add(game.attack.pieces, p)
+			combat.remember_attack_piece_origin(game, p)
+			if (!Array.isArray(game.attack.march_and_countermarch_pieces)) {
+				game.attack.march_and_countermarch_pieces = []
+			}
+			set_add(game.attack.march_and_countermarch_pieces, p)
+			set_add(game.attacked, p)
+		}
+
+		let return_state = march.return_state || "play_cc_attacker"
+		let is_attacker = !!march.is_attacker
+		delete game.march_and_countermarch
+		resume_combat_card_flow(return_state, is_attacker)
+	}
+
 	function continue_after_retreat_choice_cc_window() {
 		game.retreat_choice_cc_cp_done = true
 		game.retreat_choice_cc_done = true
@@ -1497,25 +1552,17 @@ exports.register = function (states, Engine, context) {
 				res.who(game.attack.pieces)
 			}
 			res.action("cancel")
-			for (let p = 0; p < data.pieces.length; p++) {
-				if (!data.pieces[p]) continue
-				if (data.pieces[p].nation !== "br") continue
-				if (set_has(game.attacked, p)) continue
-				if (is_not_on_map(game, p)) continue
-				let dist = Engine.map.get_distance(game.pieces[p], game.attack.space)
-				if (dist >= 1 && dist <= 2) {
-					res.piece(p)
-				}
-			}
+			for (let p of get_march_and_countermarch_piece_options()) res.piece(p)
 		},
 		piece(p) {
+			if (!get_march_and_countermarch_piece_options().includes(p)) return
 			push_undo()
 			game.march_and_countermarch.piece = p
+			game.march_and_countermarch.origin = game.pieces[p]
 			game.state = "march_and_countermarch_move"
 		},
 		cancel() {
-			delete game.march_and_countermarch
-			enter_combat_card_state("play_cc_attacker")
+			cancel_march_and_countermarch()
 		}
 	}
 
@@ -1534,40 +1581,24 @@ exports.register = function (states, Engine, context) {
 				res.who(game.attack.pieces)
 			}
 			res.action("cancel")
-			let adj = get_connected_spaces(game.pieces[p])
-			for (let s of adj) {
-				// Can only move through AP controlled spaces, to reach target space
-				if (s === game.attack.space || Engine.map.is_controlled_by(game, s, AP)) {
-					// Check distance from s to target
-					let dist = Engine.map.get_distance(s, game.attack.space)
-					if (dist <= rem - 1) {
-						if (s === game.attack.space) {
-							if (can_stack_end_in_space(game, s, [p], game.attack.pieces)) {
-								res.space(s)
-							}
-						} else {
-							res.space(s)
-						}
-					}
-				}
-			}
+			for (let s of get_march_and_countermarch_move_options()) res.space(s)
 		},
 		space(s) {
+			if (!get_march_and_countermarch_move_options().includes(s)) return
 			push_undo()
 			let p = game.march_and_countermarch.piece
+			if (!(game.march_and_countermarch.origin > 0)) game.march_and_countermarch.origin = game.pieces[p]
 			game.pieces[p] = s
 			game.march_and_countermarch.remaining_moves -= 1
 			if (s === game.attack.space) {
-				set_add(game.attack.pieces, p)
-				combat.remember_attack_piece_origin(game, p)
-				set_add(game.attacked, p)
-				delete game.march_and_countermarch
-				enter_combat_card_state("play_cc_attacker")
+				finish_march_and_countermarch_move()
 			}
 		},
+		done() {
+			finish_march_and_countermarch_move()
+		},
 		cancel() {
-			delete game.march_and_countermarch
-			enter_combat_card_state("play_cc_attacker")
+			cancel_march_and_countermarch()
 		}
 	}
 

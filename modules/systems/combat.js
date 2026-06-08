@@ -1836,7 +1836,7 @@ module.exports = function (Engine) {
 	}
 
 	function get_attack_origin_key(game, p) {
-		let space = game.pieces[p]
+		let space = get_attack_piece_origin(game, p)
 		if (!(space > 0)) return null
 		let region_attacks = game.region_activations && game.region_activations.attack
 		let stacks = region_attacks && Array.isArray(region_attacks[space]) ? region_attacks[space] : null
@@ -1855,10 +1855,15 @@ module.exports = function (Engine) {
 		return is_hq(p) || is_heavy_arty(p)
 	}
 
+	function is_march_and_countermarch_attack_piece(game, p) {
+		return Array.isArray(game.attack?.march_and_countermarch_pieces) && set_has(game.attack.march_and_countermarch_pieces, p)
+	}
+
 	function get_attack_support_block_reason(game, pieces) {
 		if (!Array.isArray(pieces) || pieces.length === 0) return null
 		for (let p of pieces) {
 			if (!is_attack_support_piece(p)) continue
+			if (is_march_and_countermarch_attack_piece(game, p)) continue
 			let origin = get_attack_origin_key(game, p)
 			let has_combat_companion = pieces.some(
 				(q) =>
@@ -4017,6 +4022,13 @@ module.exports = function (Engine) {
 		if (game.combat_cards && game.combat_cards.attacker) {
 			if (game.combat_cards.attacker.includes(CC_AP_MARCH_AND_COUNTERMARCH)) {
 				att_drm += 1
+				mark_effected(CC_AP_MARCH_AND_COUNTERMARCH)
+				log_detail(log, "前后佯动: +1 DRM")
+			}
+		}
+		if (game.combat_cards && game.combat_cards.defender) {
+			if (game.combat_cards.defender.includes(CC_AP_MARCH_AND_COUNTERMARCH)) {
+				def_drm += 1
 				mark_effected(CC_AP_MARCH_AND_COUNTERMARCH)
 				log_detail(log, "前后佯动: +1 DRM")
 			}

@@ -15,6 +15,7 @@ Available capabilities:
 action_sequence.simulate
 activation_analysis.v1
 candidate_context.v1
+combat_preview.v1
 decision.snapshot
 decision.step
 position.public
@@ -40,6 +41,11 @@ basic attack-target counts. It does not generate actions.
 `rules.analysis.activation_analysis(game, role, actions)` is a focused view of
 activation candidates grouped by space and mode for policy features and search
 priors.
+
+`rules.analysis.combat_preview(game, role, actions)` returns combat-facing
+facts for candidate actions: selected attackers, legal target previews, odds,
+defender stacks, retreat options, and current loss/advance/retreat state when a
+battle is already underway.
 
 `rules.analysis.step_decision(game, role, action)` clones a game, validates an
 AI candidate action, applies it, and advances committed confirmations or

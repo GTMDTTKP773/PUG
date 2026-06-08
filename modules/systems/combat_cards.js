@@ -387,21 +387,135 @@ module.exports = function (Engine) {
 		return attacker_has_piece(game, (p) => data.pieces[p].nation === "br" && map.is_lcu(p))
 	}
 
-	function can_play_march_and_countermarch(game) {
-		if (!has_attack(game)) return false
-		if (get_active_faction(game) !== AP) return false
-		if (!(game.events && game.events["allenby"])) return false
+	function is_march_and_countermarch_unit(p) {
+		let info = data.pieces[p]
+		if (!info || info.nation !== "br") return false
+		return game_utils.is_scu(p) || game_utils.is_lcu(p) || game_utils.is_hq(p)
+	}
 
-		for (let p = 0; p < data.pieces.length; p++) {
-			if (!data.pieces[p]) continue
-			if (data.pieces[p].nation !== "br") continue
-			if (set_has(game.attacked, p)) continue
-			if (game_utils.is_not_on_map(game, p)) continue
+	function is_march_and_countermarch_activated_space(game, s) {
+		let activated = game.activated || {}
+		return (
+			(Array.isArray(activated.move) && set_has(activated.move, s)) ||
+			(Array.isArray(activated.attack) && set_has(activated.attack, s)) ||
+			(Array.isArray(activated.attack_egypt) && set_has(activated.attack_egypt, s))
+		)
+	}
 
-			let dist = map.get_distance(game.pieces[p], game.attack.space)
-			if (dist >= 1 && dist <= 2) return true
+	function is_march_and_countermarch_region_piece_activated(game, p) {
+		if (!game.region_activations) return false
+		for (let mode of ["move", "attack"]) {
+			let mode_map = game.region_activations[mode]
+			if (!mode_map) continue
+			for (let space of Object.keys(mode_map)) {
+				let stacks = mode_map[space]
+				if (!Array.isArray(stacks)) continue
+				for (let stack of stacks) {
+					if (Array.isArray(stack?.pieces) && set_has(stack.pieces, p)) return true
+				}
+			}
 		}
 		return false
+	}
+
+	function is_march_and_countermarch_unactivated(game, p) {
+		let s = game.pieces[p]
+		if (!(s > 0 && data.spaces[s])) return false
+		if (set_has(game.attacked, p) || set_has(game.moved, p)) return false
+		if (is_march_and_countermarch_region_piece_activated(game, p)) return false
+		return !is_march_and_countermarch_activated_space(game, s)
+	}
+
+	function can_march_and_countermarch_end_in_target(game, p, target) {
+		return map.can_stack_end_in_space(game, target, [p], {
+			ignore_hq_heavy_artillery_support: game_utils.is_hq(p)
+		})
+	}
+
+	function with_march_and_countermarch_piece_space(game, p, s, fn) {
+		let previous = game.pieces[p]
+		game.pieces[p] = s
+		try {
+			return fn()
+		} finally {
+			game.pieces[p] = previous
+		}
+	}
+
+	function get_march_and_countermarch_step_candidates(game, p, from) {
+		let target = game.attack?.space
+		if (!(target > 0 && data.spaces[target])) return []
+		if (!(from > 0 && data.spaces[from])) return []
+		let options = []
+
+		return with_march_and_countermarch_piece_space(game, p, from, () => {
+			for (let s of map.get_piece_connected_spaces_for_rule(game, from, p, "move")) {
+				let is_target = s === target
+				if (!is_target) {
+					if (!map.is_controlled_by(game, s, AP)) continue
+					if (map.contains_enemy_pieces(game, s, AP)) continue
+				}
+				if (!map.can_enter_area(game, p, s)) continue
+				if (is_target && !can_march_and_countermarch_end_in_target(game, p, target)) continue
+				if (!options.includes(s)) options.push(s)
+			}
+			return options
+		})
+	}
+
+	function can_march_and_countermarch_reach_target(game, p, from, remaining_moves, seen = new Set()) {
+		let target = game.attack?.space
+		if (from === target) return true
+		if (!(remaining_moves > 0)) return false
+		let key = `${from}:${remaining_moves}`
+		if (seen.has(key)) return false
+		seen.add(key)
+
+		for (let s of get_march_and_countermarch_step_candidates(game, p, from)) {
+			if (s === target) return true
+			if (can_march_and_countermarch_reach_target(game, p, s, remaining_moves - 1, seen)) return true
+		}
+		return false
+	}
+
+	function get_march_and_countermarch_move_options(game, p = null, remaining_moves = null) {
+		if (!has_attack(game)) return []
+		p = p === null ? game.march_and_countermarch?.piece : p
+		remaining_moves = remaining_moves === null ? game.march_and_countermarch?.remaining_moves : remaining_moves
+		if (!(p >= 0 && data.pieces[p])) return []
+		if (!(remaining_moves > 0)) return []
+
+		let from = game.pieces[p]
+		return get_march_and_countermarch_step_candidates(game, p, from).filter((s) => {
+			return s === game.attack.space || can_march_and_countermarch_reach_target(game, p, s, remaining_moves - 1)
+		})
+	}
+
+	function can_select_march_and_countermarch_piece(game, p) {
+		if (!has_attack(game)) return false
+		if (!is_march_and_countermarch_unit(p)) return false
+		if (get_piece_effective_faction(game, p) !== AP) return false
+		if (game_utils.is_not_on_map(game, p)) return false
+		if (game.pieces[p] === game.attack.space) return false
+		if (!is_march_and_countermarch_unactivated(game, p)) return false
+		return get_march_and_countermarch_move_options(game, p, 2).length > 0
+	}
+
+	function get_march_and_countermarch_piece_options(game) {
+		let options = []
+		for (let p = 0; p < data.pieces.length; p++) {
+			if (can_select_march_and_countermarch_piece(game, p)) options.push(p)
+		}
+		return options
+	}
+
+	function can_play_march_and_countermarch(game) {
+		if (!can_play_in_window(game, "play_cc_attacker", AP) && !can_play_in_window(game, "play_cc_defender", AP))
+			return false
+		if (!(game.events && game.events["allenby"])) return false
+		if (game.state === "play_cc_attacker" && (game.attack?.attacker || get_active_faction(game)) !== AP) return false
+		if (game.state === "play_cc_defender" && (game.attack?.defender || get_active_faction(game)) !== AP) return false
+		return get_march_and_countermarch_piece_options(game).length > 0
 	}
 
 	function can_play_jihad_offensive(game) {
@@ -695,13 +809,19 @@ module.exports = function (Engine) {
 			windows: STANDARD_CC_WINDOWS,
 			can_play: can_play_march_and_countermarch,
 			on_play_after_disposition(game, ctx) {
-				if (!ctx.is_attacker) return
-				game.march_and_countermarch = { remaining_moves: 2, piece: -1, space: game.attack.space }
+				game.march_and_countermarch = {
+					remaining_moves: 2,
+					piece: -1,
+					space: game.attack.space,
+					origin: -1,
+					is_attacker: ctx.is_attacker,
+					return_state: ctx.return_state,
+					undo_depth: Math.max(0, (game.undo?.length || 0) - 1)
+				}
 				ctx.mark_effected()
 				game.state = "march_and_countermarch_select"
 				return "stop"
-			},
-			modifiers: { drm: 1 }
+			}
 		},
 		[combat.CC_CP_JIHAD_OFFENSIVE]: {
 			windows: PRE_FLANK_ATTACKER_CC_WINDOWS,
@@ -943,6 +1063,9 @@ module.exports = function (Engine) {
 		can_play_push_to_the_breaking_point,
 		can_play_haversack_ruse,
 		can_play_march_and_countermarch,
+		can_select_march_and_countermarch_piece,
+		get_march_and_countermarch_piece_options,
+		get_march_and_countermarch_move_options,
 		can_play_jihad_offensive,
 		can_play_german_high_command,
 		can_play_save_tiflis,

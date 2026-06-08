@@ -300,6 +300,19 @@ exports.register = function (states, Engine, context) {
 		return space_name(s)
 	}
 
+	function create_sr_cost_cache() {
+		return {
+			supply_trace_cache: new Map(),
+			supply_context:
+				typeof Engine.map.create_supply_context === "function" ? Engine.map.create_supply_context(game) : null,
+			source_cache: new Map(),
+			status_cache: new Map(),
+			disrupted_supply_sr_surcharge: new Map(),
+			german_subs_sr_surcharge: new Map(),
+			unrestricted_submarine_warfare_sr_surcharge: new Map()
+		}
+	}
+
 	function with_temporarily_removed_beachhead(beachhead, fn) {
 		let original = Array.isArray(game.beachheads) ? game.beachheads.slice() : []
 		if (game.beachheads) Engine.utils.set_delete(game.beachheads, beachhead)
@@ -541,13 +554,15 @@ exports.register = function (states, Engine, context) {
 
 	states.sr_phase = {
 		prompt(res) {
+			if (res && res._is_noop) return
+			let sr_cost_cache = create_sr_cost_cache()
 			if (game.where !== undefined && game.where !== -1) {
 				res.where(game.where)
 				res.prompt(`战略调整：选择从 ${space_name(game.where)} SR 的单位 (剩余 SR 点数: ${game.sr})`)
 				let pieces = get_pieces_in_space(game, game.where)
 				for (let p of pieces) {
 					if (can_sr_piece(game, p, active_faction())) {
-						let cost = get_sr_cost(p, game.pieces[p], null, active_faction())
+						let cost = get_sr_cost(p, game.pieces[p], null, active_faction(), sr_cost_cache)
 						if (game.sr >= cost) {
 							res.piece(p)
 						}
@@ -563,7 +578,7 @@ exports.register = function (states, Engine, context) {
 					if (from_reserve && !can_use_reserve_sr_for_piece(p)) continue
 					if (can_sr_piece(game, p, active_faction())) {
 						let from = from_reserve ? null : game.pieces[p]
-						let cost = get_sr_cost(p, from, null, active_faction())
+						let cost = get_sr_cost(p, from, null, active_faction(), sr_cost_cache)
 						if (game.sr >= cost) {
 							res.piece(p)
 							spaces.add(game.pieces[p])
@@ -625,9 +640,11 @@ exports.register = function (states, Engine, context) {
 
 	states.sr_move = {
 		prompt(res) {
+			if (res && res._is_noop) return
+			let sr_cost_cache = create_sr_cost_cache()
 			let p = game.sr_piece
 			let from = game.pieces[p]
-			let paid_cost = get_sr_cost(p, from, null, active_faction())
+			let paid_cost = get_sr_cost(p, from, null, active_faction(), sr_cost_cache)
 			res.who(p)
 			res.where(game.pieces[p])
 			res.prompt(`战略调整：选择 ${piece_name(p)} 的目的地 (已支付 SR: ${paid_cost})`)
@@ -636,7 +653,7 @@ exports.register = function (states, Engine, context) {
 			for (let s of destinations) {
 				if (from_reserve && is_reserve_space_id(s)) continue
 				if ((from_reserve || is_reserve_space_id(s)) && !can_use_reserve_sr_for_piece(p)) continue
-				let total_cost = get_sr_cost(p, from_reserve ? null : from, s, active_faction())
+				let total_cost = get_sr_cost(p, from_reserve ? null : from, s, active_faction(), sr_cost_cache)
 				let extra_cost = total_cost - paid_cost
 				if (game.sr < extra_cost) continue
 				res.space(s)
@@ -644,10 +661,11 @@ exports.register = function (states, Engine, context) {
 			res.action("cancel")
 		},
 		space(s) {
+			let sr_cost_cache = create_sr_cost_cache()
 			let p = game.sr_piece
 			let from = game.pieces[p]
-			let paid_cost = get_sr_cost(p, is_in_reserve(game, p) ? null : from, null, active_faction())
-			let total_cost = get_sr_cost(p, is_in_reserve(game, p) ? null : from, s, active_faction())
+			let paid_cost = get_sr_cost(p, is_in_reserve(game, p) ? null : from, null, active_faction(), sr_cost_cache)
+			let total_cost = get_sr_cost(p, is_in_reserve(game, p) ? null : from, s, active_faction(), sr_cost_cache)
 			let extra_cost = total_cost - paid_cost
 			let legal_destinations = get_sr_destinations(game, p, active_faction())
 			if (!legal_destinations.includes(s)) return

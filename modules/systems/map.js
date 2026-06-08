@@ -2373,12 +2373,17 @@ module.exports = function (Engine) {
 		return pieces.some((p) => !is_piece_exempt_from_submarine_penalty_in_space(game, p, s, faction))
 	}
 
-	function get_german_subs_sr_surcharge(game, from, to, faction = null, p = -1) {
+	function get_german_subs_sr_surcharge(game, from, to, faction = null, p = -1, cache = null) {
 		if (!(game && game.events && game.events["german_subs"])) return 0
 		if (faction === null || faction === undefined) faction = AP
 		if (faction !== AP) return 0
-		let source_cache = new Map()
-		let supply_context = create_supply_context(game)
+		let cache_key = null
+		if (cache && cache.german_subs_sr_surcharge) {
+			cache_key = `${from}|${to}|${faction}|${p}`
+			if (cache.german_subs_sr_surcharge.has(cache_key)) return cache.german_subs_sr_surcharge.get(cache_key)
+		}
+		let source_cache = cache?.source_cache || new Map()
+		let supply_context = cache?.supply_context || create_supply_context(game)
 		let penalized_from = is_german_subs_penalized_space(game, from, faction, supply_context, source_cache)
 		let penalized_to = is_german_subs_penalized_space(game, to, faction, supply_context, source_cache)
 		if (p >= 0) {
@@ -2389,15 +2394,24 @@ module.exports = function (Engine) {
 				penalized_to = false
 			}
 		}
-		return penalized_from || penalized_to ? 1 : 0
+		let surcharge = penalized_from || penalized_to ? 1 : 0
+		if (cache && cache.german_subs_sr_surcharge) cache.german_subs_sr_surcharge.set(cache_key, surcharge)
+		return surcharge
 	}
 
-	function get_unrestricted_submarine_warfare_sr_surcharge(game, from, to, faction = null, p = -1) {
+	function get_unrestricted_submarine_warfare_sr_surcharge(game, from, to, faction = null, p = -1, cache = null) {
 		if (!(game && game.events && game.events["unrestricted_submarine_warfare"])) return 0
 		if (faction === null || faction === undefined) faction = AP
 		if (faction !== AP) return 0
-		let source_cache = new Map()
-		let supply_context = create_supply_context(game)
+		let cache_key = null
+		if (cache && cache.unrestricted_submarine_warfare_sr_surcharge) {
+			cache_key = `${from}|${to}|${faction}|${p}`
+			if (cache.unrestricted_submarine_warfare_sr_surcharge.has(cache_key)) {
+				return cache.unrestricted_submarine_warfare_sr_surcharge.get(cache_key)
+			}
+		}
+		let source_cache = cache?.source_cache || new Map()
+		let supply_context = cache?.supply_context || create_supply_context(game)
 		let penalized_from = is_unrestricted_submarine_warfare_penalized_space(
 			game,
 			from,
@@ -2420,10 +2434,14 @@ module.exports = function (Engine) {
 				penalized_to = false
 			}
 		}
-		return penalized_from || penalized_to ? 1 : 0
+		let surcharge = penalized_from || penalized_to ? 1 : 0
+		if (cache && cache.unrestricted_submarine_warfare_sr_surcharge) {
+			cache.unrestricted_submarine_warfare_sr_surcharge.set(cache_key, surcharge)
+		}
+		return surcharge
 	}
 
-	function get_sr_cost(game_or_piece, maybe_piece, maybe_from = null, maybe_to = null, maybe_faction = null) {
+	function get_sr_cost(game_or_piece, maybe_piece, maybe_from = null, maybe_to = null, maybe_faction = null, maybe_cache = null) {
 		if (game_or_piece && typeof game_or_piece === "object" && Array.isArray(game_or_piece.pieces)) {
 			let game = game_or_piece
 			let p = maybe_piece
@@ -2438,18 +2456,35 @@ module.exports = function (Engine) {
 			}
 			return (
 				get_base_sr_cost(p) +
-				get_disrupted_supply_sr_surcharge(game, p, from, faction) +
-				get_german_subs_sr_surcharge(game, from, to, faction, p) +
-				get_unrestricted_submarine_warfare_sr_surcharge(game, from, to, faction, p)
+				get_disrupted_supply_sr_surcharge(game, p, from, faction, maybe_cache) +
+				get_german_subs_sr_surcharge(game, from, to, faction, p, maybe_cache) +
+				get_unrestricted_submarine_warfare_sr_surcharge(game, from, to, faction, p, maybe_cache)
 			)
 		}
 		return get_base_sr_cost(game_or_piece)
 	}
 
-	function get_disrupted_supply_sr_surcharge(game, p, from, faction) {
+	function get_disrupted_supply_sr_surcharge(game, p, from, faction, cache = null) {
 		if (!(from > 0) || from >= data.spaces.length || !data.spaces[from]) return 0
-		let status = get_supply_status(game, from, faction, p, true)
-		return is_disrupted_supply_status(status) ? 1 : 0
+		let cache_key = null
+		if (cache && cache.disrupted_supply_sr_surcharge) {
+			cache_key = `${p}|${from}|${faction}`
+			if (cache.disrupted_supply_sr_surcharge.has(cache_key)) return cache.disrupted_supply_sr_surcharge.get(cache_key)
+		}
+		let status = get_supply_status(
+			game,
+			from,
+			faction,
+			p,
+			true,
+			cache?.supply_trace_cache || null,
+			cache?.supply_context || null,
+			cache?.source_cache || null,
+			cache?.status_cache || null
+		)
+		let surcharge = is_disrupted_supply_status(status) ? 1 : 0
+		if (cache && cache.disrupted_supply_sr_surcharge) cache.disrupted_supply_sr_surcharge.set(cache_key, surcharge)
+		return surcharge
 	}
 
 	function is_reserve_space(s) {
@@ -5591,18 +5626,42 @@ module.exports = function (Engine) {
 	function check_rule_violations(game) {
 		let violations = []
 		let pieces_by_space = new Array(data.spaces.length).fill(0).map(() => [])
+		let effective_faction_by_piece = new Array(game.pieces.length)
+		let restricted_lcu_counts = {
+			[AP]: Object.create(null),
+			[CP]: Object.create(null)
+		}
 		for (let p = 0; p < game.pieces.length; p++) {
 			let s = game.pieces[p]
-			if (s >= 0 && s < data.spaces.length) pieces_by_space[s].push(p)
+			if (s >= 0 && s < data.spaces.length) {
+				pieces_by_space[s].push(p)
+				effective_faction_by_piece[p] = get_piece_effective_faction(game, p)
+			}
+			let info = data.pieces[p]
+			if (info && is_lcu(p) && (info.faction === AP || info.faction === CP)) {
+				let area = s >= 0 ? get_restricted_area(s) : null
+				if (area) {
+					let counts = restricted_lcu_counts[info.faction]
+					counts[area] = (counts[area] || 0) + 1
+				}
+			}
 		}
+		let get_effective_faction = (p) => effective_faction_by_piece[p] ?? get_piece_effective_faction(game, p)
 
 		// 1. General Stacking Limit (Rule 8.1.1: max 3 counted pieces)
 		for (let s = 1; s < data.spaces.length; s++) {
 			let pieces = pieces_by_space[s]
+			if (!pieces || pieces.length === 0) continue
+			let ap_pieces = []
+			let cp_pieces = []
+			for (let p of pieces) {
+				let faction = get_effective_faction(p)
+				if (faction === AP) ap_pieces.push(p)
+				else if (faction === CP) cp_pieces.push(p)
+			}
 
 			if (!is_reserve_space(s)) {
-				for (let faction of [AP, CP]) {
-					let friendly = pieces.filter((p) => get_piece_effective_faction(game, p) === faction)
+				for (let friendly of [ap_pieces, cp_pieces]) {
 					if (get_hq_heavy_artillery_support_reason(friendly)) {
 						violations.push({
 							space: s,
@@ -5612,8 +5671,8 @@ module.exports = function (Engine) {
 				}
 			}
 
-			let has_ap_units = pieces.some((p) => get_piece_effective_faction(game, p) === AP)
-			let has_cp_units = pieces.some((p) => get_piece_effective_faction(game, p) === CP)
+			let has_ap_units = ap_pieces.length > 0
+			let has_cp_units = cp_pieces.length > 0
 			if (has_ap_units && has_cp_units && !can_opposing_units_coexist_in_space(game, s)) {
 				violations.push({ space: s, rule: "Rule 8.5: Units of opposing sides may not stack in a space" })
 			}
@@ -5635,12 +5694,14 @@ module.exports = function (Engine) {
 
 		for (let s = 1; s < data.spaces.length; s++) {
 			let fort_owner = null
+			let pieces = pieces_by_space[s]
+			if (!pieces || pieces.length === 0) continue
 			if (has_undestroyed_fort(game, s, AP)) fort_owner = AP
 			else if (has_undestroyed_fort(game, s, CP)) fort_owner = CP
 			if (!fort_owner) continue
 			if (Array.isArray(game.broken_sieges) && set_has(game.broken_sieges, s)) continue
 
-			let besiegers = pieces_by_space[s].filter((p) => get_piece_effective_faction(game, p) !== fort_owner)
+			let besiegers = pieces_by_space[s].filter((p) => get_effective_faction(p) !== fort_owner)
 			if (besiegers.length > 0 && !can_besiege(game, s, besiegers)) {
 				violations.push({ space: s, rule: "Rule 15.2.1: Insufficient strength to besiege fort" })
 			}
@@ -5648,17 +5709,17 @@ module.exports = function (Engine) {
 
 		// 2. Rule 9.8: Restricted Area LCU limits
 		const restricted_areas = ["mesopotamia", "persia", "syria_palestine", "afghanistan", "central_asia"]
+		let ap_limit = get_lcu_limit_for(game, constants.AP)
+		let cp_limit = get_lcu_limit_for(game, constants.CP)
 		for (let area of restricted_areas) {
-			let ap_lcus = count_lcu_in_area(game, area, constants.AP)
-			let cp_lcus = count_lcu_in_area(game, area, constants.CP)
-
-			let ap_limit = get_lcu_limit_for(game, constants.AP)
-			let cp_limit = get_lcu_limit_for(game, constants.CP)
+			let ap_lcus = restricted_lcu_counts[AP][area] || 0
+			let cp_lcus = restricted_lcu_counts[CP][area] || 0
 
 			if (ap_lcus > ap_limit) {
 				for (let s = 1; s < data.spaces.length; s++) {
 					if (get_restricted_area(s) === area) {
 						let pieces = pieces_by_space[s]
+						if (!pieces || pieces.length === 0) continue
 						if (pieces.some((p) => data.pieces[p].faction === constants.AP && is_lcu(p))) {
 							violations.push({
 								space: s,
@@ -5672,6 +5733,7 @@ module.exports = function (Engine) {
 				for (let s = 1; s < data.spaces.length; s++) {
 					if (get_restricted_area(s) === area) {
 						let pieces = pieces_by_space[s]
+						if (!pieces || pieces.length === 0) continue
 						if (pieces.some((p) => data.pieces[p].faction === constants.CP && is_lcu(p))) {
 							violations.push({
 								space: s,
@@ -5687,6 +5749,7 @@ module.exports = function (Engine) {
 		// 4. Rule 197: Turkish/Bulgarian LCU cannot enter swamp
 		for (let s = 1; s < data.spaces.length; s++) {
 			let pieces = pieces_by_space[s]
+			if (!pieces || pieces.length === 0) continue
 			for (let p of pieces) {
 				if (is_lcu(p)) {
 					// Rule 180: Desert LCU must have rail supply
@@ -5828,7 +5891,7 @@ module.exports = function (Engine) {
 		return cost
 	}
 
-	function get_activation_cost_pair(game, s, pieces_in_space = null) {
+	function get_activation_cost_pair(game, s, pieces_in_space = null, cache = null) {
 		let pieces = Array.isArray(pieces_in_space) ? pieces_in_space : get_pieces_in_space(game, s)
 		if (pieces.length === 0) return { move: 0, attack: 0 }
 
@@ -5852,19 +5915,34 @@ module.exports = function (Engine) {
 		let move_has_disrupted_supply = false
 		let attack_has_disrupted_supply = false
 		let attack_with_br_has_disrupted_supply = false
-		let supply_trace_cache = null
-		let supply_context = null
-		let source_cache = null
-		let status_cache = null
+		let supply_trace_cache = cache?.supply_trace_cache || null
+		let supply_context = cache?.supply_context || null
+		let source_cache = cache?.source_cache || null
+		let status_cache = cache?.status_cache || null
 
-		function is_piece_in_disrupted_supply(p) {
+		function ensure_activation_supply_cache() {
 			if (!supply_trace_cache) {
-				supply_trace_cache = new Map()
-				supply_context = create_supply_context(game)
-				source_cache = new Map()
-				status_cache = new Map()
+				if (cache) {
+					if (!cache.supply_trace_cache) cache.supply_trace_cache = new Map()
+					if (!cache.supply_context) cache.supply_context = create_supply_context(game)
+					if (!cache.source_cache) cache.source_cache = new Map()
+					if (!cache.status_cache) cache.status_cache = new Map()
+					supply_trace_cache = cache.supply_trace_cache
+					supply_context = cache.supply_context
+					source_cache = cache.source_cache
+					status_cache = cache.status_cache
+				} else {
+					supply_trace_cache = new Map()
+					supply_context = create_supply_context(game)
+					source_cache = new Map()
+					status_cache = new Map()
+				}
 			}
-			let status = get_supply_status(
+		}
+
+		function get_piece_activation_supply_status(p) {
+			ensure_activation_supply_cache()
+			return get_supply_status(
 				game,
 				game.pieces[p],
 				faction,
@@ -5875,6 +5953,10 @@ module.exports = function (Engine) {
 				source_cache,
 				status_cache
 			)
+		}
+
+		function is_piece_in_disrupted_supply(p) {
+			let status = get_piece_activation_supply_status(p)
 			return is_disrupted_supply_status(status)
 		}
 
@@ -5889,7 +5971,7 @@ module.exports = function (Engine) {
 			let is_br = mo_br_no_attack && nations.some((nation) => nation === "br")
 			if (is_br) has_br_in_stack = true
 
-			if (can_piece_be_activated(p) && get_supply_status(game, s, faction, p) !== "OOS") {
+			if (can_piece_be_activated(p) && get_piece_activation_supply_status(p) !== "OOS") {
 				let disrupted_supply = is_piece_in_disrupted_supply(p)
 				move_pieces.push(p)
 				if (disrupted_supply) move_has_disrupted_supply = true
@@ -5977,8 +6059,15 @@ module.exports = function (Engine) {
 			}
 		}
 		if (faction === AP) {
-			let german_subs_penalized = is_german_subs_penalized_space(game, s, AP)
-			let unrestricted_subs_penalized = is_unrestricted_submarine_warfare_penalized_space(game, s, AP)
+			ensure_activation_supply_cache()
+			let german_subs_penalized = is_german_subs_penalized_space(game, s, AP, supply_context, source_cache)
+			let unrestricted_subs_penalized = is_unrestricted_submarine_warfare_penalized_space(
+				game,
+				s,
+				AP,
+				supply_context,
+				source_cache
+			)
 			let get_submarine_surcharge = (mode_pieces) => {
 				let surcharge = 0
 				if (is_submarine_penalty_relevant_to_pieces(game, s, AP, mode_pieces, german_subs_penalized)) {

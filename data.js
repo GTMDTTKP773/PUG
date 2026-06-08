@@ -23137,7 +23137,7 @@ var data = {
 		"lf": 2,
 		"mf": 4,
 		"rcf": 0,
-		"rlf": 2,
+		"rlf": 1,
 		"rmf": 4,
 		"symbol": "H",
 		"piece_class": "SCU",

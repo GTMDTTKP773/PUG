@@ -821,11 +821,26 @@ function analysis_activation_analysis(state, current, actions) {
 	)
 }
 
+function analysis_combat_preview(state, current, actions) {
+	let candidate = JSON.parse(JSON.stringify(state))
+	game = normalize_game(candidate)
+	update_supply_if_missing()
+	let role = short_faction(current) || short_faction(game.active)
+	return Engine.analysis.combat_preview(
+		game,
+		role,
+		actions,
+		(candidate, candidate_role, action, arg) => exports.action(candidate, candidate_role, action, arg),
+		(candidate, candidate_role) => exports.view(candidate, candidate_role)
+	)
+}
+
 exports.analysis = Object.freeze({
 	version: Engine.analysis.version,
 	capabilities: Engine.analysis.capabilities,
 	activation_analysis: analysis_activation_analysis,
 	candidate_context: analysis_candidate_context,
+	combat_preview: analysis_combat_preview,
 	decision_snapshot: analysis_decision_snapshot,
 	public_position: analysis_public_position,
 	probe_supply_cut_actions: analyze_supply_cut_actions,
@@ -906,14 +921,8 @@ function query_cards(state, faction) {
 }
 
 function get_piece_supply_status_view() {
-	const status = Array.isArray(game.supply_status) ? game.supply_status : []
-	const limited = []
-	const disrupted = []
-	for (let p = 0; p < status.length; p++) {
-		const piece_status = status[p]
-		if (Engine.map.is_limited_supply_status(piece_status)) limited.push(p)
-		if (Engine.map.is_disrupted_supply_status(piece_status)) disrupted.push(p)
-	}
+	const limited = Array.isArray(game.limited_supply) ? game.limited_supply.slice() : []
+	const disrupted = Array.isArray(game.disrupted_supply) ? game.disrupted_supply.slice() : []
 	return {
 		limited,
 		disrupted
@@ -940,38 +949,37 @@ function get_catastrophic_attack_oos_marker_spaces() {
 	return markers
 }
 
-function get_control_view() {
+function get_control_views() {
 	const view_control = {}
+	const view_defaults = {}
 	const control = Array.isArray(game.control) ? game.control : []
+	const has_dynamic_default = Engine.map && typeof Engine.map.get_default_controller === "function"
 	for (let s = 1; s < data.spaces.length; s++) {
 		const value = control[s]
-		const static_faction = data.spaces[s] && data.spaces[s].faction
-		let dynamic_default = static_faction
-		if (Engine.map && typeof Engine.map.get_default_controller === "function") {
-			dynamic_default = Engine.map.get_default_controller(game, s)
-		}
-		if (value !== undefined && value !== null) {
-			if (value !== dynamic_default) {
+		const info = data.spaces[s]
+		const static_faction = info && info.faction
+		const needs_dynamic_default = static_faction === "neutral" || info?.nation === "afghanistan"
+		if (!needs_dynamic_default) {
+			if (value !== undefined && value !== null && value !== static_faction) {
 				view_control[s] = value
 			}
+			continue
 		}
-	}
-	return view_control
-}
-
-function get_control_defaults_view() {
-	const view_defaults = {}
-	for (let s = 1; s < data.spaces.length; s++) {
-		const static_faction = data.spaces[s] && data.spaces[s].faction
 		let dynamic_default = static_faction
-		if (Engine.map && typeof Engine.map.get_default_controller === "function") {
+		if (has_dynamic_default) {
 			dynamic_default = Engine.map.get_default_controller(game, s)
+		}
+		if (value !== undefined && value !== null && value !== dynamic_default) {
+			view_control[s] = value
 		}
 		if (dynamic_default !== static_faction) {
 			view_defaults[s] = dynamic_default
 		}
 	}
-	return view_defaults
+	return {
+		control: view_control,
+		control_defaults: view_defaults
+	}
 }
 
 function get_forts_view() {
@@ -991,7 +999,18 @@ exports.view = function (state, current) {
 	game = normalize_game(state)
 	update_supply_if_missing()
 	const rollback_entries = game.rollback || []
-	const rollback_total_events = rollback_entries.reduce((sum, r) => sum + (r.events ? r.events.length : 0), 0)
+	let rollback_total_events = 0
+	let rollback_turn_points = 0
+	let rollback_action_points = 0
+	let rollback_combat_points = 0
+	let rollback_pre_replacement_points = 0
+	for (let r of rollback_entries) {
+		if (r && Array.isArray(r.events)) rollback_total_events += r.events.length
+		if (is_turn_start_rollback(r)) rollback_turn_points++
+		if (is_action_round_rollback(r)) rollback_action_points++
+		if (is_combat_rollback(r)) rollback_combat_points++
+		if (is_pre_replacement_rollback(r)) rollback_pre_replacement_points++
+	}
 	const max_rollback_turns = get_max_rollback_turns()
 	const max_rollback_action_rounds = get_max_rollback_action_rounds()
 	const ui_tokens = { ...(game.ui_tokens || {}) }
@@ -1032,6 +1051,7 @@ exports.view = function (state, current) {
 
 	function create_view() {
 		const supply_view = get_piece_supply_status_view()
+		const control_views = get_control_views()
 		const entry_gr = !!(game.entry_gr || (Engine.neutral && Engine.neutral.get_greece_faction(game)))
 		const entry_bu = !!(game.entry_bu || (game.events && game.events["bulgaria"]))
 		const entry_ro = !!(game.entry_ro || (game.events && game.events["romania"]))
@@ -1103,8 +1123,8 @@ exports.view = function (state, current) {
 			ui_tokens: ui_tokens,
 			hidden_reinforcement_markers: hidden_reinforcement_markers,
 			sinai_railroad_turn,
-			control: get_control_view(),
-			control_defaults: get_control_defaults_view(),
+			control: control_views.control,
+			control_defaults: control_views.control_defaults,
 			ru_control_markers: game.ru_control_markers || [],
 			persian_uprising_markers: game.persian_uprising_markers || [],
 			armenian_uprising_markers: game.armenian_uprising_markers || [],
@@ -1218,10 +1238,10 @@ exports.view = function (state, current) {
 				max_turns: max_rollback_turns,
 				max_action_rounds: max_rollback_action_rounds,
 				total_points: rollback_entries.length,
-				turn_points: rollback_entries.filter(is_turn_start_rollback).length,
-				action_points: rollback_entries.filter(is_action_round_rollback).length,
-				combat_points: rollback_entries.filter(is_combat_rollback).length,
-				pre_replacement_points: rollback_entries.filter(is_pre_replacement_rollback).length,
+				turn_points: rollback_turn_points,
+				action_points: rollback_action_points,
+				combat_points: rollback_combat_points,
+				pre_replacement_points: rollback_pre_replacement_points,
 				total_events: rollback_total_events,
 				state_compressed: is_rollback_state_compressed()
 			},
@@ -2883,8 +2903,8 @@ exports.get_reserve_box = get_reserve_box
 exports.get_removed_box = get_removed_box
 exports.get_eliminated_box = get_eliminated_box
 exports.get_permanently_eliminated_box = get_permanently_eliminated_box
-exports.get_sr_cost = function (p, from = null, to = null, faction = null) {
-	return get_sr_cost(game, p, from, to, faction)
+exports.get_sr_cost = function (p, from = null, to = null, faction = null, cache = null) {
+	return get_sr_cost(game, p, from, to, faction, cache)
 }
 exports.is_in_supply = is_in_supply
 exports.is_rail_connected_to_supply = is_rail_connected_to_supply
@@ -3167,7 +3187,7 @@ action_funcs = action_states.register(states, Engine, {
 	is_not_on_map,
 	can_use_reserve_sr_for_piece,
 	can_sr_piece,
-	get_sr_cost: (p, from = null, to = null, faction = null) => get_sr_cost(game, p, from, to, faction),
+	get_sr_cost: (p, from = null, to = null, faction = null, cache = null) => get_sr_cost(game, p, from, to, faction, cache),
 	piece_name,
 	space_name,
 	is_reserve_space_id,

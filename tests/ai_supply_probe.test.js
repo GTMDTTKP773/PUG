@@ -38,10 +38,11 @@ function createCaucasusActionFixture() {
 }
 
 test("rules exposes a versioned optional analysis namespace", () => {
-	expect(rules.analysis.version).toBe(5)
+	expect(rules.analysis.version).toBe(6)
 	expect(rules.analysis.capabilities).toContain("action_sequence.simulate")
 	expect(rules.analysis.capabilities).toContain("activation_analysis.v1")
 	expect(rules.analysis.capabilities).toContain("candidate_context.v1")
+	expect(rules.analysis.capabilities).toContain("combat_preview.v1")
 	expect(rules.analysis.capabilities).toContain("decision.snapshot")
 	expect(rules.analysis.capabilities).toContain("decision.step")
 	expect(rules.analysis.capabilities).toContain("position.public")
@@ -49,6 +50,7 @@ test("rules exposes a versioned optional analysis namespace", () => {
 	expect(rules.analysis.capabilities).toContain("supply_cut.standard_one_step_regular")
 	expect(rules.analysis.activation_analysis).toBeTypeOf("function")
 	expect(rules.analysis.candidate_context).toBeTypeOf("function")
+	expect(rules.analysis.combat_preview).toBeTypeOf("function")
 	expect(rules.analysis.decision_snapshot).toBeTypeOf("function")
 	expect(rules.analysis.public_position).toBeTypeOf("function")
 	expect(rules.analysis.probe_supply_cut_actions).toBeTypeOf("function")
@@ -104,6 +106,48 @@ test("rules AI activation analysis exposes stack, cost, and target facts without
 	expect(activation.actions).toHaveLength(1)
 	expect(activation.spaces[0].space).toBe(space)
 	expect(activation.spaces[0].modes).toContain("move")
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI combat preview describes attack targets without mutating source", () => {
+	let game = setupGame(2026060801, "Historical", { no_supply_warnings: true })
+	let kut = findSpace("Kut")
+	let theHai = findSpace("The Hai")
+	let tuCorps = findPiece(CP, "TU I Corps")
+	let inDiv = findPiece(AP, "IN DIV #1")
+
+	clearBoard(game)
+	game.active = CP
+	game.state = "attack"
+	game.activated = { move: [], attack: [kut], attack_egypt: [] }
+	game.region_activations = { move: {}, attack: {} }
+	game.moved = []
+	game.attacked = []
+	game.retreated = []
+	game.combat_cards = { attacker: [], defender: [] }
+	Engine.set_control(game, kut, CP)
+	Engine.set_control(game, theHai, AP)
+	game.pieces[tuCorps] = kut
+	game.pieces[inDiv] = theHai
+
+	let view = rules.view(game, CP)
+	expect(view.actions.piece).toContain(tuCorps)
+	let before = JSON.stringify(game)
+
+	let preview = rules.analysis.combat_preview(game, CP, [["piece", tuCorps]])
+	let entry = preview.previews[0]
+	let target = entry.attack.target_options.find((option) => option.space === theHai)
+
+	expect(preview.schema).toBe("pug-ai.combat_preview.v1")
+	expect(preview.role).toBe(CP)
+	expect(entry.action).toEqual(["piece", tuCorps])
+	expect(entry.state).toBe("attack")
+	expect(entry.attack.selected_pieces).toEqual([tuCorps])
+	expect(target).toBeTruthy()
+	expect(target.odds).toBe("2 (LCU) vs 0 (SCU)")
+	expect(target.attackers.pieces).toContain(tuCorps)
+	expect(target.defenders.pieces).toContain(inDiv)
+	expect(target.river_defense).toBe(false)
 	expect(JSON.stringify(game)).toBe(before)
 })
 
