@@ -942,6 +942,56 @@ test("HQ can accompany an eligible advancing combat unit but cannot anchor advan
 	expect(advance).toEqual([])
 })
 
+test("advance limit still offers HQ before follow-up advance", () => {
+	let game = rules.setup(2026060801, "Historical", { seed: 42, no_supply_warnings: true })
+	let bayburt = findSpaceByName("Bayburt")
+	let gumushane = findSpaceByName("Gumushane")
+	let trabzon = findSpaceByName("Trabzon")
+	let tuDiv10 = findPieceByName("TU DIV #10")
+	let tuDiv8 = findPieceByName("TU DIV #8")
+	let tuDiv9 = findPieceByName("TU DIV #9")
+	let enver = findPieceByName("TU Enver HQ")
+	let attackers = [tuDiv10, tuDiv8, tuDiv9, enver].sort((a, b) => a - b)
+
+	for (let p = 0; p < game.pieces.length; p++) game.pieces[p] = 0
+	for (let p of attackers) game.pieces[p] = bayburt
+	game.pieces[tuDiv8] = gumushane
+	game.pieces[tuDiv9] = gumushane
+	game.control[bayburt] = rules.CP
+	game.control[gumushane] = rules.AP
+	game.control[trabzon] = rules.AP
+	game.active = rules.CP
+	game.state = "advance"
+	game.attack = {
+		space: gumushane,
+		pieces: attackers.slice(),
+		attacker: rules.CP,
+		defender: rules.AP,
+		origin_by_piece: Object.fromEntries(attackers.map((p) => [p, bayburt]))
+	}
+	game.battle_result = { retreat_distance: 2 }
+	game.retreat_distance = 2
+	game.retreat_first_spaces = [trabzon]
+	game.advance_space = gumushane
+	game.advance_pieces = [tuDiv10, enver].sort((a, b) => a - b)
+	game.advance_count = 2
+	game.advance_limit = 3
+	game.retreated = []
+	game.undo = []
+
+	game = rules.action(game, CP_ROLE, "piece", tuDiv10)
+
+	expect(game.advance_count).toBe(3)
+	expect(game.advance_follow_pieces).toContain(tuDiv10)
+	expect(game.advance_follow_mode).toBeUndefined()
+	expect(game.advance_pieces).toEqual([enver])
+	expect(rules.view(game, CP_ROLE).actions.piece).toContain(enver)
+
+	game = rules.action(game, CP_ROLE, "piece", enver)
+
+	expect(game.pieces[enver]).toBe(gumushane)
+})
+
 test("Baratov stack can advance full-strength units when another attacker is reduced", () => {
 	let game = rules.setup(112, "Historical", { seed: 42, no_supply_warnings: true })
 	let baku = findSpaceByName("Baku")

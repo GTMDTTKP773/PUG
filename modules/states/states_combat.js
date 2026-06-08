@@ -951,6 +951,8 @@ exports.register = function (states, Engine, context) {
 		let options = []
 		let enemy_faction = other_faction(helper.faction)
 		let enemy_spaces = []
+		let is_unestablished_beachhead = (s) =>
+			Engine.map.is_potential_beachhead_space(s) && !Engine.map.is_beachhead_space(game, s)
 		for (let s = 1; s < data.spaces.length; s++) {
 			let pieces = get_pieces_in_space(game, s)
 			if (pieces.length > 0 && data.pieces[pieces[0]] && data.pieces[pieces[0]].faction === enemy_faction) {
@@ -960,6 +962,7 @@ exports.register = function (states, Engine, context) {
 
 		for (let s = 1; s < data.spaces.length; s++) {
 			if (!helper.check(game, s)) continue
+			if (is_unestablished_beachhead(s)) continue
 			if (Engine.game_utils.get_capacity(game, s) > 0) {
 				set_add(options, s)
 				continue
@@ -967,6 +970,7 @@ exports.register = function (states, Engine, context) {
 
 			let neighbors = get_connected_spaces(game, s)
 			let candidates = neighbors.filter((ns) => {
+				if (is_unestablished_beachhead(ns)) return false
 				if (Engine.map.is_controlled_by(game, ns, enemy_faction)) return false
 				if (Engine.map.is_besieged(game, ns)) return false
 				if (Engine.map.contains_enemy_pieces(game, ns, helper.faction) && !Engine.map.is_region(game, ns))
@@ -3898,6 +3902,32 @@ exports.register = function (states, Engine, context) {
 		return valid
 	}
 
+	function is_blocked_by_reserves_to_front_advance(p) {
+		return (
+			game.attack &&
+			game.attack.attacker === CP &&
+			game.reserves_to_front_effected_pieces &&
+			set_has(game.reserves_to_front_effected_pieces, p)
+		)
+	}
+
+	function is_non_counted_advance_piece(p) {
+		if (!data.pieces[p]) return false
+		if (data.pieces[p].type === "hq") return true
+		if (Engine.game_utils.is_heavy_arty(p)) return true
+		return !game.advance_yildirim_used && data.pieces[p].symbol === "Y" && data.pieces[p].nation === "ge"
+	}
+
+	function can_select_non_counted_advance_piece(p) {
+		if (is_blocked_by_reserves_to_front_advance(p)) return false
+		if (!is_non_counted_advance_piece(p)) return false
+		return get_valid_advance_spaces(game, p, game.advance_space).length > 0
+	}
+
+	function get_selectable_follow_advance_pieces() {
+		return (game.advance_follow_pieces || []).filter((uid) => get_follow_advance_spaces(uid).length > 0)
+	}
+
 	function advance_piece_into_space(p, from_space, to_space) {
 		game.pieces[p] = to_space
 		if (active_faction() === CP && Engine.map.is_beachhead_space(game, to_space)) {
@@ -3979,16 +4009,8 @@ exports.register = function (states, Engine, context) {
 
 	states.advance = {
 		prompt(res) {
-			let is_blocked_by_reserves_to_front = (p) =>
-				game.attack &&
-				game.attack.attacker === CP &&
-				game.reserves_to_front_effected_pieces &&
-				set_has(game.reserves_to_front_effected_pieces, p)
-
 			if (game.advance_follow_mode) {
-				let selectable = (game.advance_follow_pieces || []).filter(
-					(p) => get_follow_advance_spaces(p).length > 0
-				)
+				let selectable = get_selectable_follow_advance_pieces()
 				res.prompt("选择继续推进的单位")
 				res.action("end_advance")
 				if (selectable.length === 0) {
@@ -4024,7 +4046,7 @@ exports.register = function (states, Engine, context) {
 
 				if ((game.advance_count || 0) < (game.advance_limit || 3)) {
 					for (let p of game.advance_pieces) {
-						if (is_blocked_by_reserves_to_front(p)) {
+						if (is_blocked_by_reserves_to_front_advance(p)) {
 							continue
 						}
 						let valid = get_valid_advance_spaces(game, p, game.advance_space)
@@ -4034,18 +4056,7 @@ exports.register = function (states, Engine, context) {
 					}
 				} else {
 					for (let p of game.advance_pieces) {
-						if (is_blocked_by_reserves_to_front(p)) {
-							continue
-						}
-						let is_hq = data.pieces[p].type === "hq"
-						let is_heavy_arty = Engine.game_utils.is_heavy_arty(p)
-						let is_yildirim = data.pieces[p].symbol === "Y" && data.pieces[p].nation === "ge"
-						if (is_hq || is_heavy_arty || (is_yildirim && !game.advance_yildirim_used)) {
-							let valid = get_valid_advance_spaces(game, p, game.advance_space)
-							if (valid.length > 0) {
-								res.piece(p)
-							}
-						}
+						if (can_select_non_counted_advance_piece(p)) res.piece(p)
 					}
 				}
 			}
@@ -4104,41 +4115,16 @@ exports.register = function (states, Engine, context) {
 			bulls_eye_record_advanced_piece(game, p)
 			set_delete(game.advance_pieces, p)
 
-			let count_limited_left = game.advance_pieces.some((uid) => {
-				let is_hq = data.pieces[uid].type === "hq"
-				let is_heavy_arty = Engine.game_utils.is_heavy_arty(uid)
-				let is_yildirim = data.pieces[uid].symbol === "Y" && data.pieces[uid].nation === "ge"
-				if (is_hq || is_heavy_arty) return false
-				return !(is_yildirim && !game.advance_yildirim_used)
-			})
 			let limit_reached = (game.advance_count || 0) >= (game.advance_limit || 3)
 
-			if (game.advance_pieces.length === 0 || (limit_reached && !count_limited_left)) {
-				let selectable_follow = (game.advance_follow_pieces || []).filter(
-					(uid) => get_follow_advance_spaces(uid).length > 0
-				)
+			if (
+				game.advance_pieces.length === 0 ||
+				(limit_reached && !game.advance_pieces.some(can_select_non_counted_advance_piece))
+			) {
+				let selectable_follow = get_selectable_follow_advance_pieces()
 				if ((game.retreat_distance || 1) > 1 && selectable_follow.length > 0) {
 					game.advance_follow_mode = true
 					game.selected_piece = null
-				}
-			} else if (limit_reached) {
-				let allowed = game.advance_pieces.filter((uid) => {
-					if (data.pieces[uid].type === "hq") return true
-					if (Engine.game_utils.is_heavy_arty(uid)) return true
-					return (
-						!game.advance_yildirim_used &&
-						data.pieces[uid].symbol === "Y" &&
-						data.pieces[uid].nation === "ge"
-					)
-				})
-				if (allowed.length === 0) {
-					let selectable_follow = (game.advance_follow_pieces || []).filter(
-						(uid) => get_follow_advance_spaces(uid).length > 0
-					)
-					if ((game.retreat_distance || 1) > 1 && selectable_follow.length > 0) {
-						game.advance_follow_mode = true
-						game.selected_piece = null
-					}
 				}
 			}
 		},
