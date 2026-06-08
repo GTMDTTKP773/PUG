@@ -3222,7 +3222,7 @@ module.exports = function (Engine) {
 		return can_besiege(game, s, remaining)
 	}
 
-	function can_sr_piece(game, p, faction) {
+	function can_sr_piece(game, p, faction, cache = null) {
 		let info = data.pieces[p]
 		if (!info) return false
 		if (get_piece_effective_faction(game, p) !== faction) return false
@@ -3246,7 +3246,11 @@ module.exports = function (Engine) {
 		if (
 			!nations.some(
 				(nation) =>
-					nation !== "bu" || can_trace_piece_supply_to_space(game, p, SOFIA, { require_unbesieged: true })
+					nation !== "bu" ||
+					can_trace_piece_supply_to_space(game, p, SOFIA, {
+						require_unbesieged: true,
+						supply_context: cache ? cache.supply_context : null
+					})
 			)
 		) {
 			return false
@@ -3254,9 +3258,27 @@ module.exports = function (Engine) {
 		if (is_reserve_space(s)) {
 			return info.piece_class !== "LCU" && can_use_reserve_sr_for_piece(game, p, faction)
 		}
-		let status = get_supply_status(game, s, faction, p, true)
+		let status = get_supply_status(
+			game,
+			s,
+			faction,
+			p,
+			true,
+			cache ? cache.supply_trace_cache : null,
+			cache ? cache.supply_context : null,
+			cache ? cache.source_cache : null,
+			cache ? cache.status_cache : null
+		)
 		if (!is_supply_status_in_supply(status)) return false
-		if (is_cp_non_afghan_unit_tracing_only_to_afghanistan(game, p)) return false
+		if (
+			is_cp_non_afghan_unit_tracing_only_to_afghanistan(
+				game,
+				p,
+				cache ? cache.source_cache : null,
+				cache ? cache.supply_context : null
+			)
+		)
+			return false
 		if (!can_piece_leave_siege_by_sr(game, p, faction)) return false
 		if (
 			game.state === "event_enver_falkenhayn_sr" &&

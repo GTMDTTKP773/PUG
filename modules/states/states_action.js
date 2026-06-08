@@ -313,6 +313,35 @@ exports.register = function (states, Engine, context) {
 		}
 	}
 
+	function get_cached_sr_destinations(p, faction) {
+		let cache = game.sr_destinations
+		if (
+			cache &&
+			cache.piece === p &&
+			cache.faction === faction &&
+			cache.source === game.pieces[p] &&
+			Array.isArray(cache.destinations)
+		) {
+			return cache.destinations
+		}
+		return null
+	}
+
+	function cache_sr_destinations(p, faction) {
+		let destinations = get_sr_destinations(game, p, faction)
+		game.sr_destinations = {
+			piece: p,
+			faction,
+			source: game.pieces[p],
+			destinations
+		}
+		return destinations
+	}
+
+	function clear_sr_destinations() {
+		delete game.sr_destinations
+	}
+
 	function with_temporarily_removed_beachhead(beachhead, fn) {
 		let original = Array.isArray(game.beachheads) ? game.beachheads.slice() : []
 		if (game.beachheads) Engine.utils.set_delete(game.beachheads, beachhead)
@@ -561,7 +590,7 @@ exports.register = function (states, Engine, context) {
 				res.prompt(`战略调整：选择从 ${space_name(game.where)} SR 的单位 (剩余 SR 点数: ${game.sr})`)
 				let pieces = get_pieces_in_space(game, game.where)
 				for (let p of pieces) {
-					if (can_sr_piece(game, p, active_faction())) {
+					if (can_sr_piece(game, p, active_faction(), sr_cost_cache)) {
 						let cost = get_sr_cost(p, game.pieces[p], null, active_faction(), sr_cost_cache)
 						if (game.sr >= cost) {
 							res.piece(p)
@@ -576,7 +605,7 @@ exports.register = function (states, Engine, context) {
 					let from_reserve = is_in_reserve(game, p)
 					if (is_not_on_map(game, p) && !from_reserve) continue
 					if (from_reserve && !can_use_reserve_sr_for_piece(p)) continue
-					if (can_sr_piece(game, p, active_faction())) {
+					if (can_sr_piece(game, p, active_faction(), sr_cost_cache)) {
 						let from = from_reserve ? null : game.pieces[p]
 						let cost = get_sr_cost(p, from, null, active_faction(), sr_cost_cache)
 						if (game.sr >= cost) {
@@ -607,6 +636,7 @@ exports.register = function (states, Engine, context) {
 			if (game.sr >= cost) {
 				game.sr -= cost
 				game.sr_piece = p
+				cache_sr_destinations(p, active_faction())
 				game.where = -1
 				game.state = "sr_move"
 			} else {
@@ -649,7 +679,7 @@ exports.register = function (states, Engine, context) {
 			res.where(game.pieces[p])
 			res.prompt(`战略调整：选择 ${piece_name(p)} 的目的地 (已支付 SR: ${paid_cost})`)
 			let from_reserve = is_in_reserve(game, p)
-			let destinations = get_sr_destinations(game, p, active_faction())
+			let destinations = get_cached_sr_destinations(p, active_faction()) || get_sr_destinations(game, p, active_faction())
 			for (let s of destinations) {
 				if (from_reserve && is_reserve_space_id(s)) continue
 				if ((from_reserve || is_reserve_space_id(s)) && !can_use_reserve_sr_for_piece(p)) continue
@@ -667,7 +697,7 @@ exports.register = function (states, Engine, context) {
 			let paid_cost = get_sr_cost(p, is_in_reserve(game, p) ? null : from, null, active_faction(), sr_cost_cache)
 			let total_cost = get_sr_cost(p, is_in_reserve(game, p) ? null : from, s, active_faction(), sr_cost_cache)
 			let extra_cost = total_cost - paid_cost
-			let legal_destinations = get_sr_destinations(game, p, active_faction())
+			let legal_destinations = get_cached_sr_destinations(p, active_faction()) || get_sr_destinations(game, p, active_faction())
 			if (!legal_destinations.includes(s)) return
 			let delayed_suez_sr = Engine.map.can_suez_delayed_sr_to_space(game, p, from, s, active_faction())
 			if (!delayed_suez_sr && !Engine.map.can_sr_to_space(game, p, s, active_faction())) return
@@ -712,6 +742,7 @@ exports.register = function (states, Engine, context) {
 					`${piece_name(p)} Suez delayed SR: ${format_sr_space(from)} → ${format_sr_space(s)}; will arrive during the Replacement Phase of turn ${game.turn + 1}.`
 				)
 				game.sr_piece = null
+				clear_sr_destinations()
 				set_action_state("sr_phase")
 				if (game.sr === 0) goto_end_operations()
 				return
@@ -736,6 +767,7 @@ exports.register = function (states, Engine, context) {
 				`${piece_name(p)} 战略调整：${format_sr_space(from)} → ${format_sr_space(s)}${total_cost !== 1 ? ` (Cost: ${total_cost})` : ""}`
 			)
 			game.sr_piece = null
+			clear_sr_destinations()
 
 			// Rule 13.4.2 / 18.1.2: +1 Jihad if AP sea-SRs away the last unit
 			// drawing supply solely through a non-Balkan Beachhead or Ottoman port.
@@ -746,6 +778,7 @@ exports.register = function (states, Engine, context) {
 			if (game.sr === 0) goto_end_operations()
 		},
 		cancel() {
+			clear_sr_destinations()
 			pop_undo()
 		}
 	}
@@ -775,6 +808,7 @@ exports.register = function (states, Engine, context) {
 		delete game.where
 		delete game.move_space
 		delete game.sr_selected
+		delete game.sr_destinations
 		delete game.attack
 		delete game.combat_cards
 		delete game.combat_cards_effected

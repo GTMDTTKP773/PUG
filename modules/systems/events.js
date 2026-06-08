@@ -627,8 +627,7 @@ module.exports = function (Engine) {
 		if (!game.events) game.events = {}
 		if (game.events["russian_revolution_stage_4_soviet_done"]) return
 		game.events["russian_revolution_stage_4_soviet_done"] = true
-		let spaces = ["Baku", "Central Asia", "Enzeli"].map(find_space).filter((s) => s > 0)
-		game.soviet_uprising_markers = spaces
+		game.soviet_uprising_markers = ["Baku", "Central Asia", "Enzeli"].map(find_space).filter((s) => s > 0)
 		log(game, "俄国革命阶段 4：苏维埃起义标记已放置。", ctx)
 	}
 
@@ -922,8 +921,7 @@ module.exports = function (Engine) {
 		if (!Engine.neutral || typeof Engine.neutral.is_greece_neutral !== "function") return false
 		if (!Engine.neutral.is_greece_neutral(game)) return false
 		if (is_controlled_by(game, SALONIKA, AP) || is_controlled_by(game, SALONIKA, CP)) return false
-		if (is_german_subs_blocked_port(game, SALONIKA)) return false
-		return true
+		return !is_german_subs_blocked_port(game, SALONIKA);
 	}
 
 	function get_allied_solidarity_location_options(game, unit_name) {
@@ -1345,8 +1343,7 @@ module.exports = function (Engine) {
 		})
 		if (has_non_tu) return false
 		let has_reduced = game.bulls_eye_advanced_stack.some((p) => is_piece_reduced(game, p))
-		if (has_reduced) return false
-		return true
+		return !has_reduced;
 	}
 
 	function bulls_eye_use_extra_attack(game) {
