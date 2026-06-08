@@ -13,6 +13,8 @@ Available capabilities:
 
 ```text
 action_sequence.simulate
+activation_analysis.v1
+candidate_context.v1
 decision.snapshot
 decision.step
 position.public
@@ -29,6 +31,15 @@ every action and rejects a step that is not present in the authoritative
 AI search candidates, action metadata, and any deterministic follow-up action.
 It keeps legal actions separate from AI candidates so external clients can use
 the former as a policy mask and the latter as a search surface.
+
+`rules.analysis.candidate_context(game, role, actions)` returns public facts
+for legal candidate actions: card metadata, piece and space summaries,
+activation cost, available stack pieces, movement/SR destination facts, and
+basic attack-target counts. It does not generate actions.
+
+`rules.analysis.activation_analysis(game, role, actions)` is a focused view of
+activation candidates grouped by space and mode for policy features and search
+priors.
 
 `rules.analysis.step_decision(game, role, action)` clones a game, validates an
 AI candidate action, applies it, and advances committed confirmations or

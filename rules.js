@@ -801,9 +801,31 @@ function analysis_public_position(state) {
 	return Engine.analysis.public_position(game)
 }
 
+function analysis_candidate_context(state, current, actions) {
+	let candidate = JSON.parse(JSON.stringify(state))
+	game = normalize_game(candidate)
+	update_supply_if_missing()
+	let role = short_faction(current) || short_faction(game.active)
+	return Engine.analysis.candidate_context(game, role, actions, (candidate, candidate_role) =>
+		exports.view(candidate, candidate_role)
+	)
+}
+
+function analysis_activation_analysis(state, current, actions) {
+	let candidate = JSON.parse(JSON.stringify(state))
+	game = normalize_game(candidate)
+	update_supply_if_missing()
+	let role = short_faction(current) || short_faction(game.active)
+	return Engine.analysis.activation_analysis(game, role, actions, (candidate, candidate_role) =>
+		exports.view(candidate, candidate_role)
+	)
+}
+
 exports.analysis = Object.freeze({
 	version: Engine.analysis.version,
 	capabilities: Engine.analysis.capabilities,
+	activation_analysis: analysis_activation_analysis,
+	candidate_context: analysis_candidate_context,
 	decision_snapshot: analysis_decision_snapshot,
 	public_position: analysis_public_position,
 	probe_supply_cut_actions: analyze_supply_cut_actions,

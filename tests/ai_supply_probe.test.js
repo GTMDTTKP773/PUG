@@ -38,17 +38,73 @@ function createCaucasusActionFixture() {
 }
 
 test("rules exposes a versioned optional analysis namespace", () => {
-	expect(rules.analysis.version).toBe(4)
+	expect(rules.analysis.version).toBe(5)
 	expect(rules.analysis.capabilities).toContain("action_sequence.simulate")
+	expect(rules.analysis.capabilities).toContain("activation_analysis.v1")
+	expect(rules.analysis.capabilities).toContain("candidate_context.v1")
 	expect(rules.analysis.capabilities).toContain("decision.snapshot")
 	expect(rules.analysis.capabilities).toContain("decision.step")
 	expect(rules.analysis.capabilities).toContain("position.public")
 	expect(rules.analysis.capabilities).toContain("position.public.v2")
 	expect(rules.analysis.capabilities).toContain("supply_cut.standard_one_step_regular")
+	expect(rules.analysis.activation_analysis).toBeTypeOf("function")
+	expect(rules.analysis.candidate_context).toBeTypeOf("function")
 	expect(rules.analysis.decision_snapshot).toBeTypeOf("function")
 	expect(rules.analysis.public_position).toBeTypeOf("function")
 	expect(rules.analysis.probe_supply_cut_actions).toBeTypeOf("function")
 	expect(rules.analysis.step_decision).toBeTypeOf("function")
+})
+
+test("rules AI candidate context is read-only and describes opening card choices", () => {
+	let game = setupGame(2026060305)
+	let before = JSON.stringify(game)
+
+	let context = rules.analysis.candidate_context(game, CP, [["card", 56]])
+
+	expect(context.schema).toBe("pug-ai.candidate_context.v1")
+	expect(context.state).toBe("cp_opening_mobilization_pick")
+	expect(context.role).toBe(CP)
+	expect(context.contexts).toHaveLength(1)
+	expect(context.contexts[0]).toMatchObject({
+		action: ["card", 56],
+		category: "card",
+		card: { id: 56 }
+	})
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI activation analysis exposes stack, cost, and target facts without mutating source", () => {
+	let game = setupGame(2026060306, "Historical", { no_supply_warnings: true })
+	game.active = CP
+	game.state = "activate_spaces"
+	game.ops = 4
+	game.moved = []
+	game.activated = { move: [], attack: [], attack_egypt: [] }
+
+	let view = rules.view(game, CP)
+	let space = (view.actions.activate_move || [])[0]
+	expect(space).toBeGreaterThan(0)
+	let before = JSON.stringify(game)
+
+	let context = rules.analysis.candidate_context(game, CP, [["activate_move", space]])
+	let activation = rules.analysis.activation_analysis(game, CP, [["activate_move", space]])
+	let entry = context.contexts[0]
+
+	expect(entry.category).toBe("activation")
+	expect(entry.space_context.raw_id).toBe(space)
+	expect(entry.space_context.stack.counts.friendly.pieces).toBeGreaterThan(0)
+	expect(entry.activation).toMatchObject({
+		mode: "move",
+		space,
+		remaining_ops: 4
+	})
+	expect(entry.activation.cost).toBeGreaterThan(0)
+	expect(entry.activation.pieces.available.length).toBeGreaterThan(0)
+	expect(activation.schema).toBe("pug-ai.activation_analysis.v1")
+	expect(activation.actions).toHaveLength(1)
+	expect(activation.spaces[0].space).toBe(space)
+	expect(activation.spaces[0].modes).toContain("move")
+	expect(JSON.stringify(game)).toBe(before)
 })
 
 test("rules AI decision snapshot separates legal actions from search candidates", () => {
