@@ -6,6 +6,8 @@ const turnStates = require("../modules/states/states_turn.js")
 const { setupGame, findSpace, findApPiece, findCpPiece, clearBoard } = require("./helpers.js")
 
 const { AP, CP, REINFORCEMENTS } = Engine.constants
+const AP_ROLE = rules.roles[0]
+const CP_ROLE = rules.roles[1]
 
 function getTurnFuncs(game) {
 	turnStates.set_globals(game)
@@ -213,7 +215,7 @@ test("俄国革命阶段 4：玩家选择骑兵、格鲁吉亚、外高加索和
 
 	expect(game.events.russian_revolution).toBe(4)
 	expect(game.state).toBe("russian_revolution_stage_4_choose_cavalry")
-	expect(game.active).toBe(AP)
+	expect(game.active).toBe(AP_ROLE)
 	expect(Engine.game_utils.is_permanently_eliminated(game, caucasian)).toBe(false)
 
 	game = rules.action(game, "Allied Powers", "piece", cavalry2)
@@ -243,7 +245,7 @@ test("俄国革命阶段 4：玩家选择骑兵、格鲁吉亚、外高加索和
 	}
 
 	expect(game.state).toBe("russian_revolution_stage_4_ge_ix_replacement")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 
 	game = rules.action(game, "Central Powers", "piece", geDiv3)
 	expect(game.events.russian_revolution_stage_4_applied).toBe(true)

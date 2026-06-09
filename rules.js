@@ -533,6 +533,18 @@ function short_faction(faction) {
 	return faction
 }
 
+function long_faction(faction) {
+	let token = short_faction(faction)
+	if (token === AP) return AP_ROLE
+	if (token === CP) return CP_ROLE
+	return faction
+}
+
+function expose_game_state(state) {
+	if (state) state.active = long_faction(state.active)
+	return state
+}
+
 function is_player_role(role) {
 	return role === AP || role === CP || role === AP_ROLE || role === CP_ROLE
 }
@@ -699,47 +711,51 @@ exports.action = function (state, current, action, arg) {
 	game = normalize_game(state)
 	update_supply_if_missing()
 	arg = normalize_action_arg(arg)
-	const seed_before = game.seed
-	if (is_player_role(current)) {
-		let current_faction = short_faction(current)
-		let active = short_faction(game.active)
-		if (current_faction !== active) {
-			return game
+	try {
+		const seed_before = game.seed
+		if (is_player_role(current)) {
+			let current_faction = short_faction(current)
+			let active = short_faction(game.active)
+			if (current_faction !== active) {
+				return game
+			}
 		}
-	}
 
-	set_state_globals()
-	normalize_transient_state()
-	const active_before_action = short_faction(game.active)
-	const supply_dependency_before = get_supply_dependency_signature()
-	const state_handlers = states[game.state]
-	if (state_handlers && action in state_handlers) {
-		state_handlers[action](arg, current)
-	} else {
-		if (action === "undo") {
-			if (can_offer_undo()) pop_undo()
+		set_state_globals()
+		normalize_transient_state()
+		const active_before_action = short_faction(game.active)
+		const supply_dependency_before = get_supply_dependency_signature()
+		const state_handlers = states[game.state]
+		if (state_handlers && action in state_handlers) {
+			state_handlers[action](arg, current)
+		} else {
+			if (action === "undo") {
+				if (can_offer_undo()) pop_undo()
+				else if (is_player_role(current)) return game
+				else throw new Error("Invalid action: " + action)
+			}
+			else if (action === "propose_rollback") goto_propose_rollback(arg)
+			else if (action === "flag_supply_warnings") goto_flag_supply_warnings()
 			else if (is_player_role(current)) return game
 			else throw new Error("Invalid action: " + action)
 		}
-		else if (action === "propose_rollback") goto_propose_rollback(arg)
-		else if (action === "flag_supply_warnings") goto_flag_supply_warnings()
-		else if (is_player_role(current)) return game
-		else throw new Error("Invalid action: " + action)
+		normalize_transient_state()
+		const active_after_action = short_faction(game.active)
+		if (
+			(active_before_action === AP || active_before_action === CP) &&
+			(active_after_action === AP || active_after_action === CP) &&
+			active_before_action !== active_after_action
+		) {
+			clear_undo()
+		}
+		if (game.seed !== seed_before) clear_undo()
+		// Only map/supply-relevant state changes need a fresh global supply pass.
+		set_supply_dirty_if_needed(supply_dependency_before)
+		game.cache_revision = (Number(game.cache_revision) || 0) + 1
+		return game
+	} finally {
+		expose_game_state(game)
 	}
-	normalize_transient_state()
-	const active_after_action = short_faction(game.active)
-	if (
-		(active_before_action === AP || active_before_action === CP) &&
-		(active_after_action === AP || active_after_action === CP) &&
-		active_before_action !== active_after_action
-	) {
-		clear_undo()
-	}
-	if (game.seed !== seed_before) clear_undo()
-	// Only map/supply-relevant state changes need a fresh global supply pass.
-	set_supply_dirty_if_needed(supply_dependency_before)
-	game.cache_revision = (Number(game.cache_revision) || 0) + 1
-	return game
 }
 
 /**
@@ -850,61 +866,69 @@ exports.analysis = Object.freeze({
 
 exports.resign = function (state, current) {
 	game = normalize_game(state)
-	update_supply_if_missing()
-	if (game.state !== "game_over") {
-		log_br()
-		log(`${current} resigned.`)
-		game.state = "game_over"
-		game.active = "None"
-		game.result = faction_name(other_faction(short_faction(current)))
-		game.victory = current + " resigned."
+	try {
+		update_supply_if_missing()
+		if (game.state !== "game_over") {
+			log_br()
+			log(`${current} resigned.`)
+			game.state = "game_over"
+			game.active = "None"
+			game.result = faction_name(other_faction(short_faction(current)))
+			game.victory = current + " resigned."
+		}
+		return game
+	} finally {
+		expose_game_state(game)
 	}
-	return game
 }
 
 exports.query = function (state, current, q) {
 	game = normalize_game(state)
-	update_supply_if_missing()
+	try {
+		update_supply_if_missing()
 
-	if (q === "ap_cards") return query_cards(game, AP)
-	if (q === "cp_cards") return query_cards(game, CP)
+		if (q === "ap_cards") return query_cards(game, AP)
+		if (q === "cp_cards") return query_cards(game, CP)
 
-	if (q === "ap_supply") {
-		if (game.supply_projection_ap_split) {
-			return game.supply_projection_ap_split
+		if (q === "ap_supply") {
+			if (game.supply_projection_ap_split) {
+				return game.supply_projection_ap_split
+			}
+			if (game.supply_query_cache && game.supply_query_cache.ap_supply) {
+				return game.supply_query_cache.ap_supply
+			}
+			let reply = Engine.map.get_ap_supply_split_projection(game)
+			game.supply_projection_ap_split = reply
+			if (!game.supply_query_cache) game.supply_query_cache = {}
+			game.supply_query_cache.ap_supply = reply
+			return reply
 		}
-		if (game.supply_query_cache && game.supply_query_cache.ap_supply) {
-			return game.supply_query_cache.ap_supply
+
+		if (q === "cp_supply") {
+			if (game.supply_projection && game.supply_projection.cp) {
+				return { cp: game.supply_projection.cp }
+			}
+			if (game.supply_query_cache && game.supply_query_cache.cp_supply) {
+				return game.supply_query_cache.cp_supply
+			}
+			const { CP } = Engine.constants
+			let supply_spaces = Engine.map.get_supply_eligible_space_ids()
+			let cp_sources = Engine.map.get_supply_sources_from_data(game, CP)
+			let cp_supply = Engine.map.get_supplied_spaces(game, cp_sources, CP, -1)
+
+			let reply = { cp: [] }
+			for (let s of supply_spaces) {
+				reply.cp[s] = cp_supply.full.has(s) || cp_supply.disrupted.has(s) ? 1 : 0
+			}
+			if (!game.supply_query_cache) game.supply_query_cache = {}
+			game.supply_query_cache.cp_supply = reply
+			return reply
 		}
-		let reply = Engine.map.get_ap_supply_split_projection(game)
-		game.supply_projection_ap_split = reply
-		if (!game.supply_query_cache) game.supply_query_cache = {}
-		game.supply_query_cache.ap_supply = reply
-		return reply
+
+		return null
+	} finally {
+		expose_game_state(game)
 	}
-
-	if (q === "cp_supply") {
-		if (game.supply_projection && game.supply_projection.cp) {
-			return { cp: game.supply_projection.cp }
-		}
-		if (game.supply_query_cache && game.supply_query_cache.cp_supply) {
-			return game.supply_query_cache.cp_supply
-		}
-		const { CP } = Engine.constants
-		let supply_spaces = Engine.map.get_supply_eligible_space_ids()
-		let cp_sources = Engine.map.get_supply_sources_from_data(game, CP)
-		let cp_supply = Engine.map.get_supplied_spaces(game, cp_sources, CP, -1)
-
-		let reply = { cp: [] }
-		for (let s of supply_spaces) {
-			reply.cp[s] = cp_supply.full.has(s) || cp_supply.disrupted.has(s) ? 1 : 0
-		}
-		if (!game.supply_query_cache) game.supply_query_cache = {}
-		game.supply_query_cache.cp_supply = reply
-		return reply
-	}
-
-	return null
 }
 
 function query_cards(state, faction) {
@@ -1062,7 +1086,7 @@ exports.view = function (state, current) {
 				: null
 		const jerusalem_by_christmas_target = Number(jerusalem_by_christmas?.target_space)
 		return {
-			active: game.active,
+			active: long_faction(game.active),
 			state: game.state,
 			log: game.log,
 			prompt: null,
@@ -1321,6 +1345,7 @@ exports.view = function (state, current) {
 		game.log = snapshot_log_length
 		view.log = snapshot_log_length
 	}
+	expose_game_state(game)
 	return view
 }
 
@@ -1352,7 +1377,7 @@ exports.setup = function (seed, scenario, options) {
 
 	goto_start_turn()
 	game.supply_dirty = true
-	return game
+	return expose_game_state(game)
 }
 
 // === CONTROL & JIHAD ===

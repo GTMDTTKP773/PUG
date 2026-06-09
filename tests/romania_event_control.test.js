@@ -5,6 +5,7 @@ const { setupGame, findSpace, findPiece } = require("./helpers.js")
 const eventStates = Engine.event_states.states
 
 const { AP, CP, REINFORCEMENTS } = Engine.constants
+const AP_ROLE = rules.roles[0]
 
 function createEventStateRules(game) {
 	return {
@@ -197,5 +198,5 @@ test("Romania 事件在 BU 已参战时让 CP 选择 Combined BU/AH 师放置至
 	game = rules.action(game, "cp", "space", sofia)
 	expect(game.pieces[combinedBuAh]).toBe(sofia)
 	expect(game.state).toBe("activate_spaces")
-	expect(game.active).toBe(AP)
+	expect(game.active).toBe(AP_ROLE)
 })

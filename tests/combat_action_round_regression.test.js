@@ -106,7 +106,7 @@ test("Save Tiflis returns Enver Goes East to its queued second attack", () => {
 	game = rules.action(game, AP_ROLE, "done")
 
 	expect(game.state).toBe("event_enver_goes_east_resolve_next_attack")
-	expect(game.active).toBe(rules.AP)
+	expect(game.active).toBe(AP_ROLE)
 	expect(game.event_next_state).toBeUndefined()
 	expect(game.attack).toBeNull()
 	expect(game.events.save_tiflis).toBeUndefined()
@@ -841,14 +841,14 @@ test("retreat cancellation waits for defender confirmation and can be cancelled"
 	game = rules.action(game, CP_ROLE, "piece", defender1)
 
 	expect(game.state).toBe("post_retreat_cancel")
-	expect(game.active).toBe(rules.CP)
+	expect(game.active).toBe(CP_ROLE)
 	expect(rules.view(game, CP_ROLE).actions.cancel).toBe(1)
 	expect(game.reduced).toContain(defender1)
 
 	game = rules.action(game, CP_ROLE, "cancel")
 
 	expect(game.state).toBe("retreat_cancel")
-	expect(game.active).toBe(rules.CP)
+	expect(game.active).toBe(CP_ROLE)
 	expect(game.reduced).not.toContain(defender1)
 	expect(game.retreat_pieces.sort((a, b) => a - b)).toEqual([defender1, defender2].sort((a, b) => a - b))
 	expect(game.undo).toHaveLength(0)
@@ -882,7 +882,7 @@ test("cancelling retreat cancellation restores a manually replaced LCU", () => {
 	game = rules.action(game, CP_ROLE, "cancel")
 
 	expect(game.state).toBe("retreat_cancel")
-	expect(game.active).toBe(rules.CP)
+	expect(game.active).toBe(CP_ROLE)
 	expect(game.pieces[defenderLcu]).toBe(target)
 	expect(game.reduced).toContain(defenderLcu)
 	expect(game.pieces[replacements[0]]).toBe(reserve)

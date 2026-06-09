@@ -5,6 +5,7 @@ const Engine = require("../modules/engine.js")
 const { setupGame, findSpace, findPiece, clearBoard } = require("./helpers.js")
 
 const { AP, CP } = Engine.constants
+const AP_ROLE = rules.roles[0]
 
 function createCaucasusFixture() {
 	let game = setupGame(2026060201, "Historical", { no_supply_warnings: true })
@@ -176,7 +177,7 @@ test("rules AI decision step is read-only and folds deterministic browser flow",
 		["next", null]
 	])
 	expect(result.game.state).toBe("play_card")
-	expect(result.game.active).toBe(AP)
+	expect(result.game.active).toBe(AP_ROLE)
 	expect(result.decision.candidates.some(([name]) => name === "play_event")).toBe(true)
 	expect(JSON.stringify(game)).toBe(before)
 })
@@ -190,7 +191,7 @@ test("rules AI action sequence simulation is read-only and follows the next acti
 	]
 
 	let expected = rules.action(JSON.parse(before), CP, actions[0][0], actions[0][1])
-	expect(expected.active).toBe(AP)
+	expect(expected.active).toBe(AP_ROLE)
 	expected = rules.action(expected, expected.active, actions[1][0], actions[1][1])
 
 	let result = rules.analysis.simulate_action_sequence(game, actions)

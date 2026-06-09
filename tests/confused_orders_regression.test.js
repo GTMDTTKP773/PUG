@@ -83,7 +83,7 @@ test("Confused Orders is resolved by CP, not by AP", () => {
 	game = playConfusedOrders(game)
 
 	expect(game.state).toBe("confused_orders")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 	expect(rules.view(game, AP_ROLE).actions).toBeNull()
 	expect(rules.view(game, CP_ROLE).actions.move_unit).toBe(1)
 })
@@ -102,7 +102,7 @@ test("Confused Orders moves only a CP unit into the defending space", () => {
 
 	expect(game.pieces[reinforcement]).toBe(target)
 	expect(game.state).toBe("confused_orders")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 })
 
 test("Confused Orders can cancel a CP Turkish Withdrawal retreat", () => {

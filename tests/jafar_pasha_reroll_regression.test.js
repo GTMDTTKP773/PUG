@@ -80,7 +80,7 @@ test("Jafar Pasha post-roll reroll applies newly introduced attacker losses befo
 	const next = rules.action(game, CP_ROLE, "done")
 
 	expect(next.state).toBe("apply_attacker_losses")
-	expect(next.active).toBe(AP)
+	expect(next.active).toBe(AP_ROLE)
 	expect(next.attack.attacker_losses).toBe(1)
 	expect(next.attack.attacker_losses_absorbed).toBe(0)
 	expect(rules.view(next, AP_ROLE).actions.piece || []).toContain(attackers[3])
@@ -289,7 +289,7 @@ test("CP Jafar Pasha retreat from a fort makes the attacker attack the fort befo
 	expect(next.log.join("\n")).not.toContain("战斗不进行")
 
 	for (let i = 0; i < 10 && (next.state === "apply_defender_losses" || next.state === "apply_attacker_losses"); i++) {
-		let role = next.active === AP ? AP_ROLE : CP_ROLE
+		let role = next.active === AP || next.active === AP_ROLE ? AP_ROLE : CP_ROLE
 		let actions = rules.view(next, role).actions
 		if (next.state === "apply_defender_losses" && (actions.space || []).includes(adrianople)) {
 			next = rules.action(next, role, "space", adrianople)

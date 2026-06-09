@@ -321,7 +321,7 @@ test("叙利亚登陆触发圣战放置后继续协约国移动流程", () => {
 	game = rules.action(game, CP_ROLE, "done")
 
 	expect(game.state).toBe("choose_pieces_to_move")
-	expect(game.active).toBe(AP)
+	expect(game.active).toBe(AP_ROLE)
 	expect(game.move.initial).toBe(cyprus)
 	expect(rules.view(game, AP_ROLE).actions.piece || []).toContain(second)
 })
@@ -377,7 +377,7 @@ test("AP 后续行动轮开始时不会进入旧的显式预备滩头放置流�
 
 	game = rules.action(game, rules.roles[1], "end_action")
 
-	expect(game.active).toBe(AP)
+	expect(game.active).toBe(AP_ROLE)
 	expect(game.action_round).toBe(2)
 	expect(game.state).toBe("play_card")
 
@@ -609,14 +609,14 @@ test("CP cannot undo back into an AP action after AP-triggered Jihad placement",
 	game = rules.action(game, AP_ROLE, "space", lemnos)
 
 	expect(game.state).toBe("jihad_placement")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 	expect(game.undo || []).toHaveLength(0)
 	expect(rules.view(game, CP_ROLE).actions.undo).toBe(0)
 
 	game = rules.action(game, CP_ROLE, "undo")
 
 	expect(game.state).toBe("jihad_placement")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 	expect(game.pieces[brDiv]).toBe(lemnos)
 	expect(game.jihad).toBe(1)
 })

@@ -199,9 +199,18 @@ function random(range, game) {
 	return Math.floor(Math.random() * range)
 }
 
+function normalize_faction_token(f) {
+	if (typeof f !== "string") return f
+	let token = f.trim().toLowerCase()
+	if (token === "ap" || token === "allied powers") return "ap"
+	if (token === "cp" || token === "central powers") return "cp"
+	return f
+}
+
 function other_faction(f) {
-	if (f === "ap") return "cp"
-	if (f === "cp") return "ap"
+	let faction = normalize_faction_token(f)
+	if (faction === "ap") return "cp"
+	if (faction === "cp") return "ap"
 	return f
 }
 
@@ -217,5 +226,6 @@ module.exports = {
 	shuffle,
 	roll_die,
 	random,
+	normalize_faction_token,
 	other_faction
 }

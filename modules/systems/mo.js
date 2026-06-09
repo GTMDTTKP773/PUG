@@ -12,7 +12,7 @@ module.exports = function (Engine) {
 	} = game_utils
 	const exports = {}
 
-	const { roll_die } = Engine.utils
+	const { roll_die, normalize_faction_token } = Engine.utils
 	const {
 		is_balkans,
 		is_caucasus,
@@ -360,10 +360,10 @@ module.exports = function (Engine) {
 	}
 
 	function create_attack_context(game, overrides = {}) {
-		const attacker = overrides.attacker || game.attack.attacker || game.active
+		const attacker = normalize_faction_token(overrides.attacker || game.attack.attacker || game.active)
 		const space = overrides.space === undefined ? game.attack.space : overrides.space
 		const pieces = overrides.pieces || game.attack.pieces || []
-		const defender = overrides.defender || game.attack.defender || (attacker === AP ? CP : AP)
+		const defender = normalize_faction_token(overrides.defender || game.attack.defender || (attacker === AP ? CP : AP))
 		const defender_pieces =
 			overrides.defender_pieces ||
 			get_pieces_in_space(game, space).filter((p) => get_piece_effective_faction(game, p) === defender)

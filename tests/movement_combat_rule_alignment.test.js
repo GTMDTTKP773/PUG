@@ -431,7 +431,7 @@ test("Region combat asks defender to choose one legal defense stack", () => {
 	rules.action(game, CP_ROLE, "confirm")
 
 	expect(game.state).toBe("choose_region_defender_stack")
-	expect(game.active).toBe(AP)
+	expect(game.active).toBe(AP_ROLE)
 	let view = rules.view(game, AP_ROLE)
 	for (let p of defenders) expect(view.actions.piece || []).toContain(p)
 	expect(view.actions.confirm).toBeUndefined()

@@ -4,7 +4,7 @@ module.exports = function (Engine) {
 	const { data } = Engine
 	const exports = {}
 
-	const { set_has, set_add, set_delete, roll_die } = Engine.utils
+	const { set_has, set_add, set_delete, roll_die, normalize_faction_token } = Engine.utils
 	const { AP, CP } = Engine.constants
 	const MO_BALKANS = "balkans"
 	const FORT_LOSS = "FORT"
@@ -1070,7 +1070,7 @@ module.exports = function (Engine) {
 	}
 
 	function can_offer_jihad_offensive_negate(game, attackers = null, target_space = null) {
-		if (game.active !== CP) return false
+		if (normalize_faction_token(game.active) !== CP) return false
 		if (!is_jihad_offensive_active(game)) return false
 		if (is_jihad_offensive_negate_used(game)) return false
 		if (!has_jihad_offensive_attackers(game, attackers)) return false
@@ -1088,11 +1088,15 @@ module.exports = function (Engine) {
 	}
 
 	function attacker_has_jihad_offensive_trench_ignore(game, attackers = null) {
-		return game.active === CP && game.attack?.jihad_offensive_negate === true && has_jihad_offensive_attackers(game, attackers)
+		return (
+			normalize_faction_token(game.active) === CP &&
+			game.attack?.jihad_offensive_negate === true &&
+			has_jihad_offensive_attackers(game, attackers)
+		)
 	}
 
 	function can_offer_yildrim_offensive_trench_negate(game, attackers = null, target_space = null) {
-		if (game.active !== CP) return false
+		if (normalize_faction_token(game.active) !== CP) return false
 		if (!is_yildrim_offensive_active(game)) return false
 		if (is_yildrim_offensive_trench_used(game)) return false
 		if (!has_yildrim_offensive_attackers(game, attackers)) return false
@@ -1112,7 +1116,11 @@ module.exports = function (Engine) {
 	}
 
 	function attacker_has_yildrim_offensive_trench_ignore(game, attackers = null) {
-		return game.active === CP && game.attack?.yildrim_offensive_trench_negate === true && has_yildrim_offensive_attackers(game, attackers)
+		return (
+			normalize_faction_token(game.active) === CP &&
+			game.attack?.yildrim_offensive_trench_negate === true &&
+			has_yildrim_offensive_attackers(game, attackers)
+		)
 	}
 
 	function attacker_ignores_persistent_trench_effects(game, attackers = null, target_space = null) {
@@ -1518,7 +1526,7 @@ module.exports = function (Engine) {
 			return attackers.every((p) => get_piece_effective_faction(game, p) === CP)
 		}
 		if (game.attack && game.attack.attacker) return game.attack.attacker === CP
-		return game.active === CP
+		return normalize_faction_token(game.active) === CP
 	}
 
 	function get_combat_target_terrain(game, target_space, attackers = null) {

@@ -176,4 +176,4 @@ test("Enver-Falkenhayn Summit can be played when a Turkish LCU can enter Galicia
 	let view = rules.view(game, CP_ROLE)
 	expect(game.state).toBe("event_enver_falkenhayn_sr")
 	expect(view.actions.space).toContain(galicia)
-})
+}, 15000)

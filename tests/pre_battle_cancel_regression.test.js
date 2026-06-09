@@ -89,7 +89,7 @@ test("Enver Goes East skips a queued attack whose target was emptied before reso
 	game = rules.action(game, AP_ROLE, "next")
 
 	expect(game.state).toBe("event_enver_goes_east_resolve_next_attack")
-	expect(game.active).toBe(rules.AP)
+	expect(game.active).toBe(AP_ROLE)
 	expect(game.events.enver_goes_east.enver_queue).toEqual([])
 	expect(game.attack).toBeNull()
 	expect(game.reduced).not.toContain(attacker)

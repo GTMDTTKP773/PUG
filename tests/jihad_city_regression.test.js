@@ -156,7 +156,7 @@ test("Jerusalem special rule entered from attack confirmation is interactive for
 	let cp_view = rules.view(game, CP_ROLE)
 
 	expect(game.state).toBe("jerusalem_defender_choice")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 	expect(cp_view.prompt).toBe("耶路撒冷特殊规则：防守方必须选择战斗或撤退。")
 	expect(cp_view.actions.fight).toBe(1)
 	expect(cp_view.actions.withdraw).toBe(1)
@@ -164,7 +164,7 @@ test("Jerusalem special rule entered from attack confirmation is interactive for
 	game = rules.action(game, CP_ROLE, "fight")
 
 	expect(game.state).toBe("jerusalem_attacker_choice")
-	expect(game.active).toBe(AP)
+	expect(game.active).toBe(AP_ROLE)
 })
 
 test("Jerusalem optional rule is off by default", () => {
@@ -176,7 +176,7 @@ test("Jerusalem optional rule is off by default", () => {
 
 	expect(game.options.optional_jerusalem_rule).toBe(false)
 	expect(game.state).not.toBe("jerusalem_defender_choice")
-	expect(game.active).toBe(AP)
+	expect(game.active).toBe(AP_ROLE)
 	expect(cp_view.actions?.fight).toBeUndefined()
 	expect(cp_view.actions?.withdraw).toBeUndefined()
 })
@@ -190,7 +190,7 @@ test("Jerusalem defender withdrawal branch exposes a retreat action instead of s
 	let cp_view = rules.view(game, CP_ROLE)
 
 	expect(game.state).toBe("retreat")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 	expect(game.retreat_pieces).toContain(defender)
 	expect(cp_view.actions.piece).toContain(defender)
 })
@@ -217,12 +217,12 @@ test("AP continuing a Jerusalem battle pauses for the Jihad placement before com
 	expect(game.jihad).toBe(5)
 	expect(game.tribes_to_place).toBe(1)
 	expect(game.state).toBe("jihad_placement")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 	expect(game.state_stack.at(-1).state).toBe("jerusalem_continue_after_jihad")
 
 	game = rules.action(game, CP_ROLE, "done")
 	expect(game.state).toBe("jerusalem_continue_after_jihad")
-	expect(game.active).toBe(AP)
+	expect(game.active).toBe(AP_ROLE)
 
 	game = rules.action(game, AP_ROLE, "next")
 	expect(game.state).not.toBe("jerusalem_continue_after_jihad")
@@ -309,13 +309,13 @@ test("Jihad placement from German Intrigues resumes to the event placement state
 
 	let undone = rules.action(JSON.parse(JSON.stringify(game)), CP_ROLE, "undo")
 	expect(undone.state).toBe("play_card")
-	expect(undone.active).toBe(CP)
+	expect(undone.active).toBe(CP_ROLE)
 	expect(undone.jihad).toBe(0)
 
 	game = rules.action(game, CP_ROLE, "done")
 
 	expect(game.state).toBe("event_german_intrigues_persia_unit")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 })
 
 test("PE Uprising placed on Qum interrupts for Jihad placement then resumes German Intrigues markers", () => {
@@ -350,5 +350,5 @@ test("PE Uprising placed on Qum interrupts for Jihad placement then resumes Germ
 	game = rules.action(game, CP_ROLE, "done")
 
 	expect(game.state).toBe("event_german_intrigues_persia_markers")
-	expect(game.active).toBe(CP)
+	expect(game.active).toBe(CP_ROLE)
 })
