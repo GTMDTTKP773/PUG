@@ -350,9 +350,10 @@ module.exports = function (Engine) {
 		return !!(space && space.port)
 	}
 
-	const AEGEAN_PORTS = new Set(["ATHENS", "Salonika", "Lemnos", "Smyrna", "Mugla"])
+	const AEGEAN_PORTS = new Set(["Salonika", "Lemnos", "Smyrna", "Mugla"])
 
 	const EAST_MED_PORTS = new Set([
+		"ATHENS",
 		"Antalya",
 		"Adana",
 		"Alexandretta",

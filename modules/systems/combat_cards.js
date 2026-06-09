@@ -24,6 +24,7 @@ module.exports = function (Engine) {
 		"Aqaba"
 	])
 	const SHORE_SPACES = new Set([
+		"ATHENS",
 		"Antalya",
 		"Adana",
 		"Alexandretta",
