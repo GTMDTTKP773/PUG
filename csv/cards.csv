@@ -2,7 +2,7 @@ num,faction,commitment,ops,sr,remove,cc,ws,rp_a,rp_br,rp_ru,rp_ah,rp_ge,rp_tu,rp
 1,ap,mobilization,3,4,TRUE,,2,,1,2,,,,1,英俄突袭,RUSSO-BRITISH ASSAULT,(该事件不能完成俄国MO。不能在1914年秋季第一行动轮后当作事件打出)。启动波斯湾滩头的部队进行登陆(如果目标是法奥港则直接摧毁其要塞)，随后激活进行战斗。另外，启动两个包含俄国部队的地区进行战斗。
 2,ap,mobilization,2,2,TRUE,,1,,,1,,,,1,澳新增援,ANZAC REINFORCEMENTS,增援:澳新步兵师，[1个澳新骑兵师]
 3,ap,mobilization,2,2,TRUE,,,,,1,,,,1,埃及政变,EGYPTIAN COUP,-1圣战等级。在地图上放置英国塞浦路斯补给标记，塞浦路斯现在成为协约国岛屿基地。
-4,ap,mobilization,2,2,,TRUE,,,,1,,,,1,海岸炮击,SHORE BOMBARDMENT CC,在或者对东地中海、红海、波斯湾沿岸地区、苏伊士运河沿岸地区或加里波利地区的一次进攻/防御+1drm
+4,ap,mobilization,2,2,,TRUE,,,,1,,,,1,海岸炮击,SHORE BOMBARDMENT CC,在或者对东地中海、红海、波斯湾沿岸地区、苏伊士运河沿岸地区的一次进攻/防御+1drm
 5,ap,mobilization,2,2,,TRUE,,,,1,,,,1,亚美尼亚志愿队,ARMENIAN DRUZHINY CC,一次俄国或者亚美尼亚部队在**巴尔干地区外**的进攻/防御+1drm
 6,ap,mobilization,3,4,TRUE,TRUE,,,1,2,,,,1,坚韧不拔,PUGNACITY AND TENACITY CC,一次包含了印度部队的攻击/防御+1drm，并取消本次战斗及本回合剩余时间印度军队战斗时面临的恶劣天气修正。
 7,ap,mobilization,3,4,TRUE,,,,1,2,,,,1,恩维尔东方攻势,ENVER GOES EAST,协约国玩家启动和一个俄国部队占据地区相邻的两个土耳其/土耳其-阿拉伯部队控制地区，并为每一个土军堆叠选择一个攻击目标。 **(意味着协约国可以通过本事件启动同盟国单位，并为其选择攻击目标)**

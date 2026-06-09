@@ -34,7 +34,10 @@ module.exports = function (Engine) {
 		"Port Said",
 		"Alexandria",
 		"Mersa Matruh",
+		"Sidi Barrani",
 		"Sollum",
+		"El Arish",
+		"Gaza",
 		"Ismailia",
 		"Suez",
 		"Aqaba",
@@ -42,10 +45,13 @@ module.exports = function (Engine) {
 		"Jifjaffa",
 		"Nekhi",
 		"Jiddah",
+		"Yenbo",
 		"Bahrain",
 		"Abadan",
 		"Fao",
-		"Kuwait"
+		"Kuwait",
+		"Mersin",
+		"Akseki"
 	])
 	const MIDDLE_EAST_AREAS = new Set([
 		"egypt",
@@ -125,7 +131,7 @@ module.exports = function (Engine) {
 			if (get_attack_attacker_faction(game) === AP) return true
 			return map.is_ap_controlled_port_or_beachhead(game, BASRA)
 		}
-		return SHORE_SPACES.has(data.spaces[s].name) || map.is_gallipoli(s)
+		return SHORE_SPACES.has(data.spaces[s].name)
 	}
 
 	function is_middle_east_area(s) {

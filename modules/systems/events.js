@@ -1667,6 +1667,7 @@ module.exports = function (Engine) {
 	 * @param {object} game
 	 * @returns {object}
 	 */
+	exports.ensure_rein_record = ensure_rein_record
 	function ensure_rein_record(game) {
 		if (!game.rein_record) {
 			game.rein_record = { ru: 0, br: 0, in_anz: 0, tu: 0 }
@@ -2079,7 +2080,12 @@ module.exports = function (Engine) {
 			effect_cn:
 				"(只能在【丘吉尔胜出】后打出，不能在冬季回合打出。可以当作英国增援打出以代替入侵)。——海上入侵——。获得一个滩头标记，立即将其放置在一个滩头处。。入侵:英国第9军团、2个英国步兵师 至任何滩头标记地区。。增援:1个英国精锐步兵师，1个英国骑兵师至预备军格。",
 			can_play: function (game) {
-				return true
+				let can_invade = game.events["churchill_prevails"] &&
+					get_season(game) !== "Winter" &&
+					!game.events["unrestricted_submarine_warfare"] &&
+					game.events["ap_invasion_event"] !== game.turn
+				let can_reinf = (game.rein_record?.br || 0) < 1
+				return can_invade || can_reinf
 			},
 			handler: function (game, ctx) {
 				let event = start_event_data(game, ctx, "kitcheners_invasion")
@@ -2321,8 +2327,13 @@ module.exports = function (Engine) {
 			name_cn: "加里波利入侵",
 			effect_cn:
 				"(只能在【丘吉尔胜出】后打出，不能在冬季回合打出。可以当作英国增援打出以代替入侵)。——海上入侵——。入侵:(英国第8军团)、(澳新军团)、2个法国步兵师、1个英国步兵师 至岛屿基地。。若预备军格有参与入侵的LCU所对应的SCU单位，则可以立即将本次增援的受损的LCU翻至满员面。(可以立即从地图上战略调整SCU至预备军格来达成该条件)。获得两个滩头标记。",
-			can_play: function () {
-				return true
+			can_play: function (game) {
+				let can_invade = game.events["churchill_prevails"] &&
+					get_season(game) !== "Winter" &&
+					!game.events["unrestricted_submarine_warfare"] &&
+					game.events["ap_invasion_event"] !== game.turn
+				let can_reinf = (game.rein_record?.br || 0) < 1
+				return can_invade || can_reinf
 			},
 			handler: function (game, ctx) {
 				start_event_data(game, ctx, "gallipoli_invasion")
@@ -2397,8 +2408,13 @@ module.exports = function (Engine) {
 			name_cn: "萨洛尼卡入侵",
 			effect_cn:
 				"(只能在【丘吉尔胜出】后打出，不能在冬季回合打出)可以当作英国增援打出以代替入侵)。——海上入侵——。入侵:英国第16军团、(英国第12军团)、2个法国步兵师 至 岛屿基地。增援:法国东方集团军-1至预备军格。。可以将地图上最多三支英国/印度/澳新SCU战略调整至岛屿基地。。获得1个滩头标记。",
-			can_play: function () {
-				return true
+			can_play: function (game) {
+				let can_invade = game.events["churchill_prevails"] &&
+					get_season(game) !== "Winter" &&
+					!game.events["unrestricted_submarine_warfare"] &&
+					game.events["ap_invasion_event"] !== game.turn
+				let can_reinf = (game.rein_record?.br || 0) < 1
+				return can_invade || can_reinf
 			},
 			handler: function (game, ctx) {
 				let event = start_event_data(game, ctx, "salonika_invasion")

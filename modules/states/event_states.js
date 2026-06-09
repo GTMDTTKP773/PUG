@@ -1959,7 +1959,7 @@ module.exports = function (Engine) {
 			if (can_start_invasion_event(game, rules) && get_available_beachhead_placement_spaces(game).length > 0) {
 				res.action("invasion")
 			}
-			res.action("reinforcement")
+			if ((game.rein_record?.br || 0) < 1) res.action("reinforcement")
 		},
 		invasion(ctx) {
 			let { game, rules } = ctx
@@ -1978,6 +1978,8 @@ module.exports = function (Engine) {
 			let { game, rules } = ctx
 			rules.push_undo()
 			rules.log("基钦纳入侵：用作增援")
+			Engine.events.ensure_rein_record(game)
+			game.rein_record.br = (game.rein_record.br || 0) + 1
 			let event = get_active_event_data(game)
 			if (event) {
 				event.reinf_to_place = ["BR IX Corps", "BR DIV #2", "BR DIV #3"]
@@ -1995,7 +1997,7 @@ module.exports = function (Engine) {
 			if (can_start_invasion_event(game, rules)) {
 				res.action("invasion")
 			}
-			res.action("reinforcement")
+			if ((game.rein_record?.br || 0) < 1) res.action("reinforcement")
 		},
 		invasion(ctx) {
 			let { game, rules } = ctx
@@ -2013,6 +2015,8 @@ module.exports = function (Engine) {
 			let { game, rules } = ctx
 			rules.push_undo()
 			rules.log("加里波利入侵：用作增援")
+			Engine.events.ensure_rein_record(game)
+			game.rein_record.br = (game.rein_record.br || 0) + 1
 			let event = get_active_event_data(game)
 			if (event) {
 				event.reinf_to_place = ["BR VIII Corps", "ANZ ANZAC", "BR DIV #4", "FR DIV #1", "FR DIV #2"]
@@ -2034,7 +2038,7 @@ module.exports = function (Engine) {
 			if (can_start_invasion_event(game, rules)) {
 				res.action("invasion")
 			}
-			res.action("reinforcement")
+			if ((game.rein_record?.br || 0) < 1) res.action("reinforcement")
 		},
 		invasion(ctx) {
 			let { game, rules } = ctx
@@ -2052,6 +2056,8 @@ module.exports = function (Engine) {
 			let { game, rules } = ctx
 			rules.push_undo()
 			rules.log("萨洛尼卡入侵：用作增援")
+			Engine.events.ensure_rein_record(game)
+			game.rein_record.br = (game.rein_record.br || 0) + 1
 			let event = get_active_event_data(game)
 			if (event) {
 				event.reinf_to_place = ["BR XVI Corps", "BR XII Corps", "FR DIV #3", "FR DIV #4"]
