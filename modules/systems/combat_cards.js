@@ -131,7 +131,7 @@ module.exports = function (Engine) {
 			if (get_attack_attacker_faction(game) === AP) return true
 			return map.is_ap_controlled_port_or_beachhead(game, BASRA)
 		}
-		return SHORE_SPACES.has(data.spaces[s].name)
+		return SHORE_SPACES.has(data.spaces[s].name) || map.is_gallipoli(s)
 	}
 
 	function is_middle_east_area(s) {

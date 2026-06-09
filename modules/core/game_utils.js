@@ -705,6 +705,15 @@ module.exports = function (Engine) {
 		return scu
 	}
 
+	function restore_lcu_from_scu(game, lcu, space, scu, runtime_state = null) {
+		let snapshot = runtime_state || capture_lcu_runtime_state(game, scu)
+		let scu_faction = get_piece_status_box_faction(game, scu)
+		game.pieces[lcu] = space
+		transfer_lcu_runtime_state(game, scu, lcu, snapshot)
+		game.pieces[scu] = get_scu_reserve_box(scu_faction)
+		return lcu
+	}
+
 	function reset_piece_runtime_state(game, p) {
 		set_delete(game.moved, p)
 		set_delete(game.attacked, p)
@@ -1411,6 +1420,7 @@ module.exports = function (Engine) {
 		remove_piece_from_game,
 		eliminate_piece,
 		replace_lcu_with_scu,
+		restore_lcu_from_scu,
 		add_rps,
 		normalize_trench_owner,
 		other_trench_owner,

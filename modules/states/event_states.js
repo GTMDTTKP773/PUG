@@ -2856,7 +2856,13 @@ module.exports = function (Engine) {
 			}
 
 			if (is_elim_or_removed_exception) {
-				game.pieces[p] = rebuild_space
+				let replacement_scu = game.attack?.lcu_replacement_map?.[p]
+				if (replacement_scu > 0) {
+					Engine.game_utils.restore_lcu_from_scu(game, p, rebuild_space, replacement_scu)
+					delete game.attack.lcu_replacement_map[p]
+				} else {
+					game.pieces[p] = rebuild_space
+				}
 				rules.set_add(game.reduced, p)
 				rules.log(`>> ${rules.piece_name(p)} 在 ${rules.space_name(rebuild_space)} 重建`)
 			} else {

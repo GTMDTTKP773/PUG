@@ -350,6 +350,72 @@ test("Reserves to the Front keeps an eliminated attacking LCU at its original sp
 	expect(Engine.game_utils.is_piece_reduced(game, turkishLcu)).toBe(true)
 })
 
+test("Reserves to the Front returns the replacement SCU to reserve when rebuilding an eliminated LCU", () => {
+	const game = setupGame(260514, "Historical", { no_supply_warnings: true })
+	const origin = findSpace("Constantinople")
+	const target = findSpace("Adrianople")
+	const turkishLcu = findPieceByName("TU I Corps")
+	const replacement = findPieceByName("TU DIV #1")
+	const defender = findPieceByName("RU DIV #3")
+	const cpReserve = Engine.game_utils.get_scu_reserve_box(CP)
+
+	clearBoard(game)
+	game.pieces[turkishLcu] = origin
+	game.pieces[replacement] = cpReserve
+	game.pieces[defender] = target
+	game.control[origin] = CP
+	game.control[target] = AP
+	game.active = CP
+	game.state = "apply_attacker_losses"
+	game.events = {}
+	game.reduced = [turkishLcu]
+	game.rp_cp.tu = 2
+	game.attack = {
+		space: target,
+		pieces: [turkishLcu],
+		origin_by_piece: { [turkishLcu]: origin },
+		attacker: CP,
+		defender: AP,
+		initial_attackers: [turkishLcu],
+		initial_defenders: [defender],
+		reserves_to_front_damaged_pieces: [],
+		reserves_to_front_initial_reduced_pieces: [],
+		attacker_losses: 2,
+		attacker_losses_absorbed: 0,
+		defender_losses: 0,
+		defender_losses_absorbed: 0
+	}
+	game.battle_result = {
+		attackers: [turkishLcu],
+		defenders: [defender],
+		attacker_losses: 2,
+		defender_losses: 0,
+		turkish_retreat: false,
+		retreating_units: []
+	}
+
+	rules.action(game, CP_ROLE, "piece", turkishLcu)
+
+	expect(Engine.game_utils.is_eliminated(game, turkishLcu)).toBe(true)
+	expect(game.attack.origin_by_piece[replacement]).toBe(origin)
+	expect(game.attack.lcu_replacement_map[turkishLcu]).toBe(replacement)
+
+	game.active = CP
+	game.state = "event_reserves_to_front"
+	game.reserves_to_front_pieces = Engine.combat_cards.get_reserves_to_front_piece_pool(game)
+
+	rules.action(game, CP_ROLE, "piece", turkishLcu)
+
+	expect(game.pieces[turkishLcu]).toBe(origin)
+	expect(game.pieces[replacement]).toBe(cpReserve)
+	expect(game.attack.lcu_replacement_map[turkishLcu]).toBeUndefined()
+	expect(game.attack.pieces).toContain(turkishLcu)
+	expect(game.attack.pieces).not.toContain(replacement)
+	expect(game.battle_result.attackers).toContain(turkishLcu)
+	expect(game.battle_result.attackers).not.toContain(replacement)
+	expect(Engine.game_utils.is_piece_reduced(game, turkishLcu)).toBe(true)
+})
+
 test("combat start snapshots initially reduced units for Reserves to the Front", () => {
 	const game = setupGame(260508, "Historical", { no_supply_warnings: true })
 	const origin = findSpace("Oltu")
