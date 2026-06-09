@@ -3329,6 +3329,8 @@ module.exports = function (Engine) {
 			game.combine_ctx = {
 				selected_scus: [],
 				allowed_lcus: new_lcus,
+				space: s,
+				faction: CP,
 				event_flag_on_success: { key: "turkish_reinf_81", field: "combine_used" }
 			}
 			game.state = "combine_lcu"

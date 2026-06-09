@@ -249,31 +249,12 @@ exports.register = function (states, Engine, context) {
 			(p) =>
 				game.pieces[p] === s &&
 				!set_has(game.moved, p) &&
-				!is_pending_combine_piece(p) &&
 				can_piece_move_in_activation(p, faction)
 		)
 	}
 
-	function get_pending_combine_entries(faction = active_faction()) {
-		if (!Array.isArray(game.pending_combine)) return []
-		return game.pending_combine.filter((entry) => {
-			if (!entry || !Array.isArray(entry.pieces) || entry.pieces.length === 0) return false
-			if (entry.faction && entry.faction !== faction) return false
-			return entry.pieces.some((p) => game.pieces[p] === entry.space)
-		})
-	}
-
-	function is_pending_combine_piece(p) {
-		if (!Array.isArray(game.pending_combine)) return false
-		return game.pending_combine.some((entry) => entry && Array.isArray(entry.pieces) && set_has(entry.pieces, p))
-	}
-
-	function get_non_pending_combine_scus_in_space(s) {
-		return get_pieces_in_space(game, s).filter((p) => is_scu(p) && !is_pending_combine_piece(p))
-	}
-
 	function can_space_combine_in_activation(s, faction = active_faction()) {
-		let allowed_scus = get_non_pending_combine_scus_in_space(s)
+		let allowed_scus = get_pieces_in_space(game, s).filter((p) => is_scu(p))
 		return Engine.game_utils.can_combine_in_space(game, s, faction, null, allowed_scus)
 	}
 
@@ -287,7 +268,6 @@ exports.register = function (states, Engine, context) {
 	function can_piece_participate_in_activation(p, faction) {
 		if (p < 0 || !data.pieces[p]) return false
 		if (is_not_on_map(game, p)) return false
-		if (is_pending_combine_piece(p)) return false
 		if (Engine.game_utils.get_piece_effective_faction(game, p) !== faction) return false
 		if (get_piece_activation_supply_status(p, faction) === "OOS") return false
 		if (Engine.neutral.is_greek_piece(p)) {
@@ -307,6 +287,21 @@ exports.register = function (states, Engine, context) {
 
 	function get_current_move_faction() {
 		return (game.move && game.move.faction) || active_faction()
+	}
+
+	function get_combine_space(space = null) {
+		if (space > 0) return space
+		let ctx = game.combine_ctx || {}
+		if (ctx.space > 0) return ctx.space
+		if (game.where > 0) return game.where
+		if (game.move && game.move.initial > 0) return game.move.initial
+		return game.where
+	}
+
+	function get_combine_faction(faction = null) {
+		if (faction) return faction
+		let ctx = game.combine_ctx || {}
+		return ctx.faction || get_current_move_faction()
 	}
 
 	function with_active_faction(faction, fn) {
@@ -411,38 +406,21 @@ exports.register = function (states, Engine, context) {
 		return true
 	}
 
-	function same_piece_set(a, b) {
-		if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
-		return a.every((p) => set_has(b, p))
-	}
-
-	function mark_pending_combine(s, pieces, faction = active_faction()) {
+	function begin_immediate_move_combination(s, pieces, faction = get_current_move_faction()) {
 		if (!Array.isArray(pieces) || pieces.length < 2 || pieces.length > 3) return false
-		if (!can_selected_move_pieces_combine(pieces)) return false
-		if (!game.pending_combine) game.pending_combine = []
-		for (let p of pieces) {
-			if (is_pending_combine_piece(p)) return false
-		}
-		game.pending_combine.push({
+		if (!can_selected_move_pieces_combine(pieces, s, faction)) return false
+		game.where = s
+		delete game.move
+		game.combine_ctx = {
+			selected_scus: pieces.slice(),
+			allowed_scus: pieces.slice(),
 			space: s,
-			pieces: pieces.slice(),
-			faction
-		})
-		log(`>${piece_list(pieces)} 待组合`)
+			faction,
+			immediate_resolution: true,
+			return_to_move_phase: true
+		}
+		set_next_state("combine_lcu_select_lcu")
 		return true
-	}
-
-	function remove_pending_combine(space, pieces, faction = active_faction()) {
-		if (!Array.isArray(game.pending_combine)) return
-		let index = game.pending_combine.findIndex(
-			(entry) =>
-				entry &&
-				entry.space === space &&
-				(!entry.faction || entry.faction === faction) &&
-				same_piece_set(entry.pieces, pieces)
-		)
-		if (index >= 0) game.pending_combine.splice(index, 1)
-		if (game.pending_combine.length === 0) delete game.pending_combine
 	}
 
 	function resolve_pending_entrench_attempt(s, faction = active_faction()) {
@@ -484,50 +462,7 @@ exports.register = function (states, Engine, context) {
 		})
 	}
 
-	function skip_pending_combination(ctx = game.combine_ctx) {
-		if (!ctx || !ctx.pending_resolution) return false
-		for (let p of ctx.selected_scus || []) {
-			if (game.pieces[p] === ctx.pending_space) set_add(game.moved, p)
-		}
-		remove_pending_combine(ctx.pending_space, ctx.selected_scus || [], ctx.pending_resolution_faction)
-		clear_combine_ctx()
-		goto_entrench_rolls_or_attack(ctx.pending_resolution_faction)
-		return true
-	}
-
-	function begin_next_pending_combination(faction = active_faction()) {
-		let entries = get_pending_combine_entries(faction)
-		if (entries.length === 0) return false
-
-		let entry = entries[0]
-		let selected = entry.pieces.filter((p) => game.pieces[p] === entry.space)
-		if (selected.length < 2) {
-			remove_pending_combine(entry.space, entry.pieces, faction)
-			return begin_next_pending_combination(faction)
-		}
-
-		game.where = entry.space
-		game.combine_ctx = {
-			selected_scus: selected.slice(),
-			allowed_scus: selected.slice(),
-			pending_resolution: true,
-			pending_space: entry.space,
-			pending_resolution_faction: faction
-		}
-
-		let valid_lcus = get_valid_lcus_for_selected_scus(selected)
-		if (valid_lcus.length === 0) {
-			log(`待组合无可用 LCU：${piece_list(selected)} (${space_name(entry.space)})`)
-			skip_pending_combination(game.combine_ctx)
-			return true
-		}
-
-		set_next_state("combine_lcu_select_lcu")
-		return true
-	}
-
 	function goto_entrench_rolls_or_attack(faction = active_faction()) {
-		if (begin_next_pending_combination(faction)) return
 		if (get_pending_entrench_spaces(faction).length > 0) {
 			game.entrench_roll_faction = faction
 			set_next_state("entrench_roll")
@@ -833,22 +768,24 @@ exports.register = function (states, Engine, context) {
 		delete game.region_activation_selection
 	}
 
-	function can_selected_move_pieces_combine(selected_pieces) {
+	function can_selected_move_pieces_combine(selected_pieces, space = null, faction = null) {
 		if (!Array.isArray(selected_pieces) || selected_pieces.length < 2 || selected_pieces.length > 3) return false
-		let space = game.move && game.move.initial > 0 ? game.move.initial : game.where
-		if (!can_space_combine_in_activation(space, active_faction())) return false
-		if (selected_pieces.some((p) => is_pending_combine_piece(p))) return false
-		let available = get_available_combine_scus()
+		space = get_combine_space(space)
+		faction = get_combine_faction(faction)
+		if (!can_space_combine_in_activation(space, faction)) return false
+		let available = get_available_combine_scus(space, faction)
 		if (!selected_pieces.every((p) => set_has(available, p))) return false
-		return get_valid_lcus_for_selected_scus(selected_pieces).length > 0
+		return get_valid_lcus_for_selected_scus(selected_pieces, space, faction).length > 0
 	}
 
-	function can_combine_in_activation_space(space = game.where) {
+	function can_combine_in_activation_space(space = null, faction = null) {
+		space = get_combine_space(space)
+		faction = get_combine_faction(faction)
 		let ctx = game.combine_ctx || {}
 		return Engine.game_utils.can_combine_in_space(
 			game,
 			space,
-			active_faction(),
+			faction,
 			ctx.allowed_lcus || null,
 			ctx.allowed_scus || null
 		)
@@ -1571,19 +1508,21 @@ exports.register = function (states, Engine, context) {
 	states.combine_lcu = {
 		prompt(res) {
 			let selected = get_selected_combine_scus()
-			res.prompt(`在 ${space_name(game.where)} 选择2或3个SCU进行组合`)
-			res.where(game.where)
+			let space = get_combine_space()
+			let faction = get_combine_faction()
+			res.prompt(`在 ${space_name(space)} 选择2或3个SCU进行组合`)
+			res.where(space)
 			res.who(selected)
-			if (!can_combine_in_activation_space()) {
+			if (!can_combine_in_activation_space(space, faction)) {
 				res.action("cancel")
 				return
 			}
 
-			for (let p of get_available_combine_scus()) {
+			for (let p of get_available_combine_scus(space, faction)) {
 				res.piece(p)
 			}
 
-			if (selected.length >= 2 && get_valid_lcus_for_selected_scus(selected).length > 0) {
+			if (selected.length >= 2 && get_valid_lcus_for_selected_scus(selected, space, faction).length > 0) {
 				res.action("select_lcu")
 			}
 			if (selected.length > 0) {
@@ -1592,7 +1531,9 @@ exports.register = function (states, Engine, context) {
 			res.action("cancel")
 		},
 		piece(p) {
-			if (!set_has(get_available_combine_scus(), p)) {
+			let space = get_combine_space()
+			let faction = get_combine_faction()
+			if (!set_has(get_available_combine_scus(space, faction), p)) {
 				return
 			}
 			let selected = get_selected_combine_scus()
@@ -1605,16 +1546,16 @@ exports.register = function (states, Engine, context) {
 			}
 			set_add(selected, p)
 			if (selected.length >= 2) {
-				let valid_lcus = get_valid_lcus_for_selected_scus(selected)
+				let valid_lcus = get_valid_lcus_for_selected_scus(selected, space, faction)
 				if (valid_lcus.length === 0) {
 					// Check if it could be part of a 3-piece combo
-					let available = get_available_combine_scus()
+					let available = get_available_combine_scus(space, faction)
 					let could_be_3 = false
 					if (selected.length === 2) {
 						for (let third of available) {
 							if (!set_has(selected, third)) {
 								let test_3 = [...selected, third]
-								if (get_valid_lcus_for_selected_scus(test_3).length > 0) {
+								if (get_valid_lcus_for_selected_scus(test_3, space, faction).length > 0) {
 									could_be_3 = true
 									break
 								}
@@ -1630,13 +1571,15 @@ exports.register = function (states, Engine, context) {
 		},
 		select_lcu() {
 			let selected = get_selected_combine_scus()
-			if (!can_combine_in_activation_space()) {
+			let space = get_combine_space()
+			let faction = get_combine_faction()
+			if (!can_combine_in_activation_space(space, faction)) {
 				return
 			}
 			if (selected.length < 2) {
 				return
 			}
-			if (get_valid_lcus_for_selected_scus(selected).length === 0) {
+			if (get_valid_lcus_for_selected_scus(selected, space, faction).length === 0) {
 				return
 			}
 			game.state = "combine_lcu_select_lcu"
@@ -1656,29 +1599,29 @@ exports.register = function (states, Engine, context) {
 	states.combine_lcu_select_lcu = {
 		prompt(res) {
 			let selected = get_selected_combine_scus()
+			let space = get_combine_space()
+			let faction = get_combine_faction()
 			res.prompt(`选择预备区中可与已选SCU组合的LCU`)
-			res.where(game.where)
+			res.where(space)
 			res.who(selected)
-			res.space(get_lcu_reserve_box(active_faction()))
+			res.space(get_lcu_reserve_box(faction))
 
-			let valid_lcus = get_valid_lcus_for_selected_scus(selected)
+			let valid_lcus = get_valid_lcus_for_selected_scus(selected, space, faction)
 			for (let lcu of valid_lcus) {
 				res.piece(lcu)
 			}
 
-			if (game.combine_ctx && game.combine_ctx.pending_resolution) {
-				if (valid_lcus.length === 0) res.action("skip")
-			} else {
-				res.action("back")
-				res.action("cancel")
-			}
+			res.action("back")
+			res.action("cancel")
 		},
 		piece(lcu_id) {
 			let selected = get_selected_combine_scus()
-			if (!can_combine_in_activation_space()) return
-			if (!set_has(get_valid_lcus_for_selected_scus(selected), lcu_id)) return
-			if (!Engine.map.can_enter_area(game, lcu_id, game.where)) return
-			let options = get_manual_combination_for_lcu(lcu_id, selected)
+			let space = get_combine_space()
+			let faction = get_combine_faction()
+			if (!can_combine_in_activation_space(space, faction)) return
+			if (!set_has(get_valid_lcus_for_selected_scus(selected, space, faction), lcu_id)) return
+			if (!Engine.map.can_enter_area(game, lcu_id, space)) return
+			let options = get_manual_combination_for_lcu(lcu_id, selected, space)
 			if (!options) {
 				return
 			}
@@ -1688,49 +1631,43 @@ exports.register = function (states, Engine, context) {
 				selected_scus: selected.slice(),
 				lcu_id,
 				type: options.type,
-				pending_scus: selected.slice()
+				dispose_scus: selected.slice()
 			}
 			game.state = "combine_lcu_dispose_reserve"
 		},
 		back() {
-			if (game.combine_ctx && game.combine_ctx.pending_resolution) return
 			game.state = "combine_lcu"
 		},
 		cancel() {
-			if (skip_pending_combination()) return
 			clear_combine_ctx()
 			return_to_combine_entry()
-		},
-		skip() {
-			skip_pending_combination()
 		}
 	}
 
 	states.combine_lcu_dispose_reserve = {
 		prompt(res) {
 			let ctx = game.combine_ctx
-			if (!ctx || !ctx.pending_scus || ctx.pending_scus.length === 0) {
+			if (!ctx || !ctx.dispose_scus || ctx.dispose_scus.length === 0) {
 				return_to_combine_entry()
 				return
 			}
 			res.prompt("选择移入预备区的SCU")
-			res.where(game.where)
-			res.space(get_scu_reserve_box(active_faction()))
-			res.who(ctx.pending_scus)
-			for (let p of ctx.pending_scus) res.piece(p)
-			if (!ctx.pending_resolution) res.action("cancel")
+			res.where(get_combine_space())
+			res.space(get_scu_reserve_box(get_combine_faction()))
+			res.who(ctx.dispose_scus)
+			for (let p of ctx.dispose_scus) res.piece(p)
+			res.action("cancel")
 		},
 		piece(p) {
 			let ctx = game.combine_ctx
-			if (!ctx || !set_has(ctx.pending_scus, p)) return
+			if (!ctx || !set_has(ctx.dispose_scus, p)) return
 			game.pieces[p] = get_scu_reserve_box(data.pieces[p].faction)
-			set_delete(ctx.pending_scus, p)
+			set_delete(ctx.dispose_scus, p)
 			log(`${piece_name(p)} to reserve.`)
 			if (ctx.type === "full") game.state = "combine_lcu_dispose_eliminated"
 			else game.state = "combine_lcu_dispose_removed"
 		},
 		cancel() {
-			if (game.combine_ctx && game.combine_ctx.pending_resolution) return
 			clear_combine_ctx()
 			return_to_combine_entry()
 		}
@@ -1739,67 +1676,57 @@ exports.register = function (states, Engine, context) {
 	states.combine_lcu_dispose_eliminated = {
 		prompt(res) {
 			let ctx = game.combine_ctx
-			if (!ctx || !ctx.pending_scus || ctx.pending_scus.length === 0) {
+			if (!ctx || !ctx.dispose_scus || ctx.dispose_scus.length === 0) {
 				return_to_combine_entry()
 				return
 			}
 			res.prompt("选择移入被消灭区的SCU")
-			res.where(game.where)
-			res.space(get_eliminated_box(active_faction()))
-			res.who(ctx.pending_scus)
-			for (let p of ctx.pending_scus) res.piece(p)
-			if (!ctx.pending_resolution) res.action("cancel")
+			res.where(get_combine_space())
+			res.space(get_eliminated_box(get_combine_faction()))
+			res.who(ctx.dispose_scus)
+			for (let p of ctx.dispose_scus) res.piece(p)
 		},
 		piece(p) {
 			let ctx = game.combine_ctx
-			if (!ctx || !set_has(ctx.pending_scus, p)) return
+			if (!ctx || !set_has(ctx.dispose_scus, p)) return
 			game.pieces[p] = get_eliminated_box(data.pieces[p].faction)
 			set_delete(game.reduced, p)
-			set_delete(ctx.pending_scus, p)
+			set_delete(ctx.dispose_scus, p)
 			log(`${piece_name(p)} to eliminated.`)
 			game.state = "combine_lcu_dispose_removed"
-		},
-		cancel() {
-			if (game.combine_ctx && game.combine_ctx.pending_resolution) return
-			clear_combine_ctx()
-			return_to_combine_entry()
 		}
 	}
 
 	states.combine_lcu_dispose_removed = {
 		prompt(res) {
 			let ctx = game.combine_ctx
-			if (!ctx || !ctx.pending_scus || ctx.pending_scus.length === 0) {
+			if (!ctx || !ctx.dispose_scus || ctx.dispose_scus.length === 0) {
 				return_to_combine_entry()
 				return
 			}
 			res.prompt("选择移入PE的SCU")
-			res.where(game.where)
-			res.space(get_permanently_eliminated_box(active_faction()))
-			res.who(ctx.pending_scus)
-			for (let p of ctx.pending_scus) res.piece(p)
-			if (!ctx.pending_resolution) res.action("cancel")
+			res.where(get_combine_space())
+			res.space(get_permanently_eliminated_box(get_combine_faction()))
+			res.who(ctx.dispose_scus)
+			for (let p of ctx.dispose_scus) res.piece(p)
 		},
 		piece(p) {
 			let ctx = game.combine_ctx
-			if (!ctx || !set_has(ctx.pending_scus, p)) return
+			if (!ctx || !set_has(ctx.dispose_scus, p)) return
 			game.pieces[p] = get_permanently_eliminated_box(data.pieces[p].faction)
-			set_delete(ctx.pending_scus, p)
+			set_delete(ctx.dispose_scus, p)
 			log(`${piece_name(p)} removed.`)
 			finalize_manual_combination()
-		},
-		cancel() {
-			if (game.combine_ctx && game.combine_ctx.pending_resolution) return
-			clear_combine_ctx()
-			return_to_combine_entry()
 		}
 	}
 
-	function get_available_combine_scus() {
+	function get_available_combine_scus(space = null, faction = null) {
 		const { game_utils } = Engine
-		if (!can_combine_in_activation_space()) return []
-		let pieces = get_pieces_in_space(game, game.where)
-		log_activation_debug(`[调试] get_available_combine_scus in space: ${game.where}, pieces in space: ${pieces}`)
+		space = get_combine_space(space)
+		faction = get_combine_faction(faction)
+		if (!can_combine_in_activation_space(space, faction)) return []
+		let pieces = get_pieces_in_space(game, space)
+		log_activation_debug(`[调试] get_available_combine_scus in space: ${space}, pieces in space: ${pieces}`)
 		return pieces.filter((p) => {
 			let info = data.pieces[p]
 			if (!is_scu(p)) {
@@ -1820,12 +1747,8 @@ exports.register = function (states, Engine, context) {
 				log_activation_debug(`[调试] piece ${p} (${info.name}) is Tribe`)
 				return false
 			}
-			if (game_utils.get_piece_effective_faction(game, p) !== active_faction()) {
+			if (game_utils.get_piece_effective_faction(game, p) !== faction) {
 				log_activation_debug(`[调试] piece ${p} (${info.name}) faction mismatch`)
-				return false
-			}
-			if (is_pending_combine_piece(p) && !(game.combine_ctx && game.combine_ctx.allowed_scus)) {
-				log_activation_debug(`[调试] piece ${p} (${info.name}) already pending combination`)
 				return false
 			}
 			if (set_has(game.moved, p)) {
@@ -1841,7 +1764,7 @@ exports.register = function (states, Engine, context) {
 				log_activation_debug(`[调试] piece ${p} (${info.name}) has yellow badge`)
 				return false
 			}
-			let status = get_piece_activation_supply_status(p, active_faction())
+			let status = get_piece_activation_supply_status(p, faction)
 			if (status === "OOS") {
 				log_activation_debug(`[调试] piece ${p} (${info.name}) out of supply`)
 				return false
@@ -1860,8 +1783,9 @@ exports.register = function (states, Engine, context) {
 		return game.combine_ctx.selected_scus
 	}
 
-	function get_manual_combination_for_lcu(lcu_id, selected_scus) {
-		let options = Engine.game_utils.get_combination_options_for_lcu(game, lcu_id, selected_scus.slice(), game.where)
+	function get_manual_combination_for_lcu(lcu_id, selected_scus, space = null) {
+		space = get_combine_space(space)
+		let options = Engine.game_utils.get_combination_options_for_lcu(game, lcu_id, selected_scus.slice(), space)
 		if (!options) {
 			log_activation_debug(`[调试] get_manual_combination_for_lcu: no options for lcu ${data.pieces[lcu_id].name}`)
 			return null
@@ -1889,10 +1813,11 @@ exports.register = function (states, Engine, context) {
 		return options
 	}
 
-	function get_valid_lcus_for_selected_scus(selected_scus) {
+	function get_valid_lcus_for_selected_scus(selected_scus, space = null, faction = null) {
 		if (selected_scus.length < 2 || selected_scus.length > 3) return []
-		if (!can_combine_in_activation_space()) return []
-		let faction = active_faction()
+		space = get_combine_space(space)
+		faction = get_combine_faction(faction)
+		if (!can_combine_in_activation_space(space, faction)) return []
 		let lcus = Engine.game_utils.get_available_lcus_in_reserve(game, faction)
 		if (game.combine_ctx && game.combine_ctx.allowed_lcus) {
 			lcus = lcus.filter((lcu) => set_has(game.combine_ctx.allowed_lcus, lcu))
@@ -1901,8 +1826,8 @@ exports.register = function (states, Engine, context) {
 			`[调试] get_valid_lcus_for_selected_scus: faction=${faction}, reserve lcus: ${lcus.map((id) => data.pieces[id].name)}`
 		)
 		return lcus.filter((lcu) => {
-			if (!Engine.map.can_enter_area(game, lcu, game.where)) return false
-			let res = get_manual_combination_for_lcu(lcu, selected_scus)
+			if (!Engine.map.can_enter_area(game, lcu, space)) return false
+			let res = get_manual_combination_for_lcu(lcu, selected_scus, space)
 			log_activation_debug(`[调试] check lcu ${data.pieces[lcu].name}: valid=${!!res}`)
 			return !!res
 		})
@@ -1912,15 +1837,24 @@ exports.register = function (states, Engine, context) {
 		delete game.combine_ctx
 	}
 
-	function return_to_combine_entry() {
+	function return_to_combine_entry(ctx = game.combine_ctx) {
 		if (game.event_next_state) {
 			let next_state = game.event_next_state
 			delete game.event_next_state
 			game.state = next_state
+		} else if (ctx && ctx.return_to_move_phase) {
+			let faction = ctx.faction || active_faction()
+			delete game.move_from_attack
+			game.where = -1
+			next_move_activation(faction)
+			return
+		} else if (ctx && ctx.return_state) {
+			game.state = ctx.return_state
 		} else {
 			game.state = game.move_from_attack ? "attack" : "choose_move_space"
 		}
 		delete game.move_from_attack
+		if (game.state === "choose_move_space") game.where = -1
 	}
 
 	function finalize_manual_combination() {
@@ -1930,29 +1864,24 @@ exports.register = function (states, Engine, context) {
 			return
 		}
 		let lcu_info = data.pieces[ctx.lcu_id]
-		let space = game.where
+		let space = get_combine_space()
+		let faction = get_combine_faction()
 		game.pieces[ctx.lcu_id] = space
 		if (ctx.type === "reduced") {
 			set_add(game.reduced, ctx.lcu_id)
-			log(`${active_faction()} 将2个SCU组合为 ${lcu_info.name} 在 ${space_name(space)}.`)
+			log(`${faction} 将2个SCU组合为 ${lcu_info.name} 在 ${space_name(space)}.`)
 		} else {
 			set_delete(game.reduced, ctx.lcu_id)
-			log(`${active_faction()} 将3个SCU组合为 ${lcu_info.name} 在 ${space_name(space)}.`)
+			log(`${faction} 将3个SCU组合为 ${lcu_info.name} 在 ${space_name(space)}.`)
 		}
 		if (ctx.event_flag_on_success && game.event_ctx && game.event_ctx.key === ctx.event_flag_on_success.key) {
 			if (!game.event_ctx.data) game.event_ctx.data = {}
 			game.event_ctx.data[ctx.event_flag_on_success.field] = true
 		}
 		set_add(game.moved, ctx.lcu_id)
-		if (ctx.pending_resolution) {
-			let faction = ctx.pending_resolution_faction || active_faction()
-			remove_pending_combine(ctx.pending_space, ctx.selected_scus || [], faction)
-			clear_combine_ctx()
-			goto_entrench_rolls_or_attack(faction)
-			return
-		}
+		let return_ctx = ctx
 		clear_combine_ctx()
-		return_to_combine_entry()
+		return_to_combine_entry(return_ctx)
 	}
 
 	states.choose_pieces_to_move = {
@@ -2009,7 +1938,7 @@ exports.register = function (states, Engine, context) {
 						}
 					}
 				}
-				if (can_selected_move_pieces_combine(game.move.pieces)) {
+				if (can_selected_move_pieces_combine(game.move.pieces, s, get_current_move_faction())) {
 					res.action("combine")
 				}
 				if (can_selected_move_pieces_remove_uprising_marker()) {
@@ -2061,16 +1990,11 @@ exports.register = function (states, Engine, context) {
 		},
 		combine() {
 			let s = game.move.initial
+			let faction = get_current_move_faction()
 			let selected = game.move.pieces.slice()
-			if (!can_selected_move_pieces_combine(selected)) return
+			if (!can_selected_move_pieces_combine(selected, s, faction)) return
 			push_undo()
-			if (!mark_pending_combine(s, selected, get_current_move_faction())) return
-			game.move.pieces = []
-			if (has_move_activation_options_in_space(s, get_current_move_faction())) {
-				set_next_state("choose_pieces_to_move")
-			} else {
-				end_move_activation(s, get_current_move_faction())
-			}
+			begin_immediate_move_combination(s, selected, faction)
 		},
 		remove_uprising_marker() {
 			if (!can_selected_move_pieces_remove_uprising_marker()) return

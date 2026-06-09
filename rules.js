@@ -1220,9 +1220,6 @@ exports.view = function (state, current) {
 			oos: game.oos || [],
 			oos_spaces: game.oos_spaces || [],
 			entrenching: game.entrenching || [],
-			pending_combine: (game.pending_combine || []).flatMap((entry) =>
-				entry && Array.isArray(entry.pieces) ? entry.pieces : []
-			),
 			last_card: game.last_card || 0,
 			combat_cards: game.combat_cards || null,
 			cc_retained: {

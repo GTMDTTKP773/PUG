@@ -1,7 +1,7 @@
 const Engine = require("../modules/engine.js")
 const rules = require("../rules.js")
 
-const { setupGame, findSpace, findApPiece, findCpPiece: findPiece, clearBoard } = require("./helpers.js")
+const { setupGame, findSpace, findApPiece, findPieceByPredicate, findCpPiece: findPiece, clearBoard } = require("./helpers.js")
 
 const { AP, CP, COMMITMENT_MOBILIZATION, RESERVE } = Engine.constants
 const AP_ROLE = rules.roles[0]
@@ -265,6 +265,32 @@ test("AP can organize an LCU in AP-controlled Basra as a supplied restricted-are
 
 	expect(Engine.map.is_rail_connected_to_supply(game, basra, AP)).toBe(false)
 	expect(Engine.map.is_ap_controlled_port_or_beachhead(game, basra)).toBe(true)
+	expect(Engine.map.count_lcu_in_area(game, "mesopotamia", AP)).toBe(0)
+	expect(Engine.game_utils.can_combine_in_space(game, basra, AP)).toBe(true)
+})
+
+test("moving an existing LCU out of a restricted area restores combine eligibility there", () => {
+	let game = setupGame(2026052305, "Historical", { no_supply_warnings: true })
+	let basra = findSpace("Basra")
+	let cairo = findSpace("CAIRO")
+	let qurna = findSpace("Qurna")
+	let fao = findSpace("Fao")
+	let existingLcu = findPieceByPredicate(
+		(info) => info.name === "BR VIII Corps" && info.piece_class === "LCU" && info.faction === AP,
+		"BR VIII Corps LCU"
+	)
+
+	clearBoard(game)
+	game.control[basra] = AP
+	game.control[fao] = AP
+	game.pieces[existingLcu] = qurna
+	placeBritishDivisionPairForReducedCorps(game, basra)
+
+	expect(Engine.map.count_lcu_in_area(game, "mesopotamia", AP)).toBe(1)
+	expect(Engine.game_utils.can_combine_in_space(game, basra, AP)).toBe(false)
+
+	game.pieces[existingLcu] = cairo
+
 	expect(Engine.map.count_lcu_in_area(game, "mesopotamia", AP)).toBe(0)
 	expect(Engine.game_utils.can_combine_in_space(game, basra, AP)).toBe(true)
 })

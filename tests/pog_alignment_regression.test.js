@@ -39,7 +39,6 @@ function prepareMoveActivation(game, faction, spaces) {
 	game.retreated = []
 	game.where = -1
 	delete game.move
-	delete game.pending_combine
 	delete game.combine_ctx
 }
 
@@ -87,7 +86,7 @@ test("done while choosing pieces ends that move activation", () => {
 	expect(rules.view(game, CP_ROLE).actions.space || []).not.toContain(constantinople)
 })
 
-test("combine is marked during movement and resolved before entrench rolls", () => {
+test("combine resolves immediately during movement before entrench rolls", () => {
 	let game = setupGame(2026052903, "Historical", { no_supply_warnings: true })
 	let tabuk = findSpace("Tabuk")
 	let ankara = findSpace("Ankara")
@@ -121,9 +120,15 @@ test("combine is marked during movement and resolved before entrench rolls", () 
 
 	game = rules.action(game, CP_ROLE, "combine")
 
-	expect(game.pending_combine).toEqual([{ space: tabuk, pieces: [div1, div2], faction: CP }])
 	expect(game.state).toBe("combine_lcu_select_lcu")
-	expect(rules.view(game, CP_ROLE).pending_combine).toEqual([div1, div2])
+	expect(game.combine_ctx).toMatchObject({
+		selected_scus: [div1, div2],
+		allowed_scus: [div1, div2],
+		space: tabuk,
+		faction: CP,
+		immediate_resolution: true,
+		return_to_move_phase: true
+	})
 	expect(Engine.map.get_pieces_in_space(game, tabuk)).toEqual(expect.arrayContaining([div1, div2]))
 
 	game = rules.action(game, CP_ROLE, "piece", corps)
@@ -132,8 +137,36 @@ test("combine is marked during movement and resolved before entrench rolls", () 
 	expect(game.state).toBe("combine_lcu_dispose_removed")
 	game = rules.action(game, CP_ROLE, "piece", div2)
 
-	expect(game.pending_combine || []).toEqual([])
 	expect(game.pieces[corps]).toBe(tabuk)
 	expect(game.reduced).toContain(corps)
 	expect(game.state).toBe("entrench_roll")
+})
+
+test("selected SCUs can move or combine, and moving clears the combine action", () => {
+	let game = setupGame(2026052904, "Historical", { no_supply_warnings: true })
+	let tabuk = findSpace("Tabuk")
+	let div1 = findCpPiece("TU DIV #1")
+	let div2 = findCpPiece("TU DIV #2")
+	let corps = findCpPiece("TU I Corps")
+
+	clearBoard(game)
+	game.control[tabuk] = CP
+	game.pieces[div1] = tabuk
+	game.pieces[div2] = tabuk
+	game.pieces[corps] = Engine.game_utils.get_lcu_reserve_box(CP)
+	prepareMoveActivation(game, CP, [tabuk])
+
+	game = rules.action(game, CP_ROLE, "space", tabuk)
+	game = rules.action(game, CP_ROLE, "piece", div1)
+	game = rules.action(game, CP_ROLE, "piece", div2)
+
+	let view = rules.view(game, CP_ROLE)
+	expect(view.actions.combine).toBe(1)
+	expect((view.actions.space || []).length).toBeGreaterThan(0)
+
+	let destination = (view.actions.space || [])[0]
+	game = rules.action(game, CP_ROLE, "space", destination)
+
+	expect(game.state).toBe("move_stack")
+	expect(rules.view(game, CP_ROLE).actions.combine).toBeUndefined()
 })

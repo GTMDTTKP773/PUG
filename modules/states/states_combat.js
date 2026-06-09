@@ -1687,10 +1687,6 @@ exports.register = function (states, Engine, context) {
 		cancel_advance() {
 			game.confused_orders.cancel_advance = true
 		},
-		cancel_both() {
-			game.confused_orders.cancel_retreat = true
-			game.confused_orders.cancel_advance = true
-		},
 		move_unit() {
 			game.state = "confused_orders_move"
 		},
@@ -1703,8 +1699,7 @@ exports.register = function (states, Engine, context) {
 					game.battle_result.no_advance = true
 				}
 			}
-			let next_active = game.attack?.attacker || game.confused_orders?.prev_active || AP
-			game.active = next_active
+			game.active = game.attack?.attacker || game.confused_orders?.prev_active || AP
 			game.confused_orders_used = true
 			delete game.confused_orders
 			end_battle_sequence()
