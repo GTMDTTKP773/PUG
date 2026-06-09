@@ -142,6 +142,21 @@ module.exports = function (Engine) {
 		})
 	}
 
+	function is_gurkhas_qualifying_piece(game, p) {
+		let info = data.pieces[p]
+		if (!info) return false
+		let is_br_or_in =
+			piece_counts_as_nation_for_rule(game, p, "br") || piece_counts_as_nation_for_rule(game, p, "in")
+		if (!is_br_or_in) return false
+		if (info.badge === "infantry") return true
+		if (info.piece_class === "LCU" && info.badge === "yellow") return true
+		return (info.piece_class === "SCU" || info.piece_class === "LCU") && info.badge === "blue"
+	}
+
+	function has_gurkhas_qualifying_piece(pieces, game) {
+		return Array.isArray(pieces) && pieces.some((p) => is_gurkhas_qualifying_piece(game, p))
+	}
+
 	function get_faction_side_pieces_in_battle(game, faction) {
 		if (!has_attack(game)) return []
 		let attackers = game.attack.pieces || []
@@ -254,7 +269,7 @@ module.exports = function (Engine) {
 
 	function can_play_gurkhas(game) {
 		if (!can_play_in_standard_cc_window(game)) return false
-		return has_nation_on_side_in_battle(game, ["br", "in"], AP)
+		return has_gurkhas_qualifying_piece(get_faction_side_pieces_in_battle(game, AP), game)
 	}
 
 	function get_maude_attack_origin_spaces(game) {
@@ -738,8 +753,8 @@ module.exports = function (Engine) {
 			windows: STANDARD_CC_WINDOWS,
 			can_play: can_play_gurkhas,
 			modifiers: {
-				drm({ has_nation, side_pieces }) {
-					return has_nation(side_pieces, ["br", "in"]) ? 1 : 0
+				drm({ game, side_pieces }) {
+					return has_gurkhas_qualifying_piece(side_pieces, game) ? 1 : 0
 				}
 			}
 		},

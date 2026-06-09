@@ -1986,7 +1986,7 @@ module.exports = function (Engine) {
 		15: {
 			name: "GURKHAS CC",
 			name_cn: "廓尔喀人",
-			effect_cn: "一次英国/印度军队的进攻或者防御+1drm"
+			effect_cn: "一次包含英国/印度步兵、英国/印度蓝色SCU/LCU或者英国/印度黄色LCU的进攻或者防御+1drm"
 		},
 		16: {
 			name: "ARAB REVOLT",
