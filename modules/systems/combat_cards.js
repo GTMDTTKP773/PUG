@@ -103,6 +103,23 @@ module.exports = function (Engine) {
 		return get_attack_pieces(game).some(predicate)
 	}
 
+	function get_attack_attacker_faction(game) {
+		let attacker = game.attack?.attacker
+		if ((attacker === undefined || attacker === null) && Array.isArray(game.attack?.pieces)) {
+			let attacker_piece = game.attack.pieces.find((p) => p !== null && p !== undefined)
+			if (attacker_piece !== undefined) {
+				attacker = get_piece_effective_faction(game, attacker_piece)
+			}
+		}
+		return attacker ?? game.active
+	}
+
+	function get_attack_defender_faction(game) {
+		let defender = game.attack?.defender
+		if (defender !== undefined && defender !== null) return defender
+		return map.other_faction(get_attack_attacker_faction(game))
+	}
+
 	function is_sinai_space(name) {
 		return SINAI_SPACES.has(name)
 	}
@@ -110,7 +127,9 @@ module.exports = function (Engine) {
 	function is_shore_bombardment_space(game, s) {
 		if (!(s > 0 && data.spaces[s])) return false
 		if (s === BASRA) {
-			return map.is_controlled_by(game, BASRA, AP) && map.is_controlled_by(game, FAO, AP)
+			if (get_attack_attacker_faction(game) === AP) return map.is_controlled_by(game, BASRA, CP)
+			if (get_attack_defender_faction(game) === AP) return map.is_controlled_by(game, FAO, AP)
+			return false
 		}
 		return SHORE_SPACES.has(data.spaces[s].name) || map.is_gallipoli(s)
 	}
