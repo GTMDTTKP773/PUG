@@ -45,6 +45,32 @@ test("2 TU SCU + 1 TUA SCU can combine into TUA LCU", () => {
 	expect(result.pieces).toHaveLength(3)
 })
 
+test("Arab Desertion blocks TUA LCU as a combination target but still allows TUA SCUs", () => {
+	let game = setupGame(2026060901)
+	let constantinople = findSpace("Constantinople")
+
+	clearBoard(game)
+	game.events.arab_desertion = true
+	game.pieces[findPiece("TU DIV #1")] = constantinople
+	game.pieces[findPiece("TU DIV #2")] = constantinople
+	game.pieces[findPiece("TU-A DIV #1")] = constantinople
+	game.moved = []
+
+	let tuCorps = findPiece("TU I Corps")
+	let tuaCorps = findPiece("TU-A VI Corps")
+	game.pieces[tuCorps] = 0
+	game.pieces[tuaCorps] = 0
+
+	let scu_ids = [findPiece("TU DIV #1"), findPiece("TU DIV #2"), findPiece("TU-A DIV #1")]
+	let tuResult = Engine.game_utils.get_combination_options_for_lcu(game, tuCorps, scu_ids, constantinople)
+	let tuaResult = Engine.game_utils.get_combination_options_for_lcu(game, tuaCorps, scu_ids, constantinople)
+
+	expect(tuResult).not.toBeNull()
+	expect(tuResult.type).toBe("full")
+	expect(tuResult.pieces).toContain(findPiece("TU-A DIV #1"))
+	expect(tuaResult).toBeNull()
+})
+
 test("2 TUA SCU + 1 TU SCU cannot combine into TU LCU", () => {
 	let game = setupGame(2026050902)
 	let constantinople = findSpace("Constantinople")

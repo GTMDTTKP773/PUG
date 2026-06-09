@@ -1155,6 +1155,9 @@ module.exports = function (Engine) {
 	function get_combination_options_for_lcu(game, lcu_id, scu_ids, space = null) {
 		const { map } = Engine
 		let lcu_info = data.pieces[lcu_id]
+		if (Engine.events.is_arab_desertion_active(game) && lcu_info.nation === "tua") {
+			return null
+		}
 		if (space !== null) {
 			if (map.is_galicia(space) && (lcu_info.nation === "tu" || lcu_info.nation === "tua")) {
 				return null
@@ -1268,7 +1271,6 @@ module.exports = function (Engine) {
 			if (is_hq(p) || is_tribe(p)) return false
 			if (get_piece_effective_faction(game, p) !== faction) return false
 			if (set_has(game.moved, p)) return false
-			if (Engine.events.is_arab_desertion_active(game) && data.pieces[p].nation === "tua") return false
 			let status = supply.get_supply_status(game, s, faction, p)
 			return status !== "OOS" && !supply.is_limited_supply_status(status)
 		})

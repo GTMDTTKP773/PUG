@@ -85,7 +85,11 @@ test("Confused Orders is resolved by CP, not by AP", () => {
 	expect(game.state).toBe("confused_orders")
 	expect(game.active).toBe(CP_ROLE)
 	expect(rules.view(game, AP_ROLE).actions).toBeNull()
-	expect(rules.view(game, CP_ROLE).actions.move_unit).toBe(1)
+	let cpView = rules.view(game, CP_ROLE)
+	expect(cpView.actions.move_unit).toBe(1)
+	expect(cpView.actions.cancel_all).toBe(1)
+	expect(cpView.actions.cancel_advance_only).toBe(1)
+	expect(cpView.actions.done).toBeUndefined()
 })
 
 test("Confused Orders moves only a CP unit into the defending space", () => {
@@ -123,8 +127,10 @@ test("Confused Orders can cancel a CP Turkish Withdrawal retreat", () => {
 	})
 
 	game = playConfusedOrders(game)
-	expect(rules.view(game, CP_ROLE).actions.done).toBe(1)
+	expect(rules.view(game, CP_ROLE).actions.cancel_all).toBe(1)
 
+	game = rules.action(game, CP_ROLE, "cancel_all")
+	expect(rules.view(game, CP_ROLE).actions.done).toBe(1)
 	game = rules.action(game, CP_ROLE, "done")
 
 	expect(game.state).not.toBe("turkish_retreat")
@@ -132,13 +138,33 @@ test("Confused Orders can cancel a CP Turkish Withdrawal retreat", () => {
 	expect(game.turkish_retreat).toBeUndefined()
 })
 
+test("Confused Orders can cancel only AP advance and still allow CP retreat", () => {
+	let { game, origin, target, attacker, defender } = createConfusedOrdersState()
+
+	game = playConfusedOrders(game)
+	expect(rules.view(game, CP_ROLE).actions.cancel_advance_only).toBe(1)
+
+	game = rules.action(game, CP_ROLE, "cancel_advance_only")
+	expect(rules.view(game, CP_ROLE).actions.done).toBe(1)
+
+	game = rules.action(game, CP_ROLE, "done")
+
+	expect(game.battle_result.retreat_needed).toBe(true)
+	expect(game.battle_result.no_advance).toBe(true)
+	expect(["retreat", "retreat_cancel"]).toContain(game.state)
+	expect(game.pieces[defender]).toBe(target)
+	expect(game.pieces[attacker]).toBe(origin)
+})
+
 test("Confused Orders can cancel AP advance after the defending space is empty", () => {
 	let { game, origin, attacker, defender } = createConfusedOrdersState()
 	game.pieces[defender] = Engine.game_utils.get_eliminated_box(CP)
 
 	game = playConfusedOrders(game)
-	expect(rules.view(game, CP_ROLE).actions.done).toBe(1)
+	expect(rules.view(game, CP_ROLE).actions.cancel_all).toBe(1)
 
+	game = rules.action(game, CP_ROLE, "cancel_all")
+	expect(rules.view(game, CP_ROLE).actions.done).toBe(1)
 	game = rules.action(game, CP_ROLE, "done")
 
 	expect(game.state).not.toBe("advance")
@@ -153,6 +179,7 @@ test("Confused Orders is not offered again after a post-battle CP card window", 
 	game.attack.reserves_to_front_initial_reduced_pieces = []
 
 	game = playConfusedOrders(game)
+	game = rules.action(game, CP_ROLE, "cancel_all")
 	game = rules.action(game, CP_ROLE, "done")
 
 	expect(game.state).toBe("post_battle_cc_cp")

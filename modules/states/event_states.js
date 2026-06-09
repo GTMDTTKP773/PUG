@@ -4724,7 +4724,7 @@ module.exports = function (Engine) {
 				if (
 					data.pieces[p] &&
 					data.pieces[p].nation === "sb" &&
-					(Engine.game_utils.is_lcu(p) || Engine.game_utils.is_scu(p)) &&
+					Engine.game_utils.is_lcu(p) &&
 					(Engine.game_utils.is_in_reserve(game, p) || !Engine.game_utils.is_not_on_map(game, p))
 				) {
 					res.piece(p)
