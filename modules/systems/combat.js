@@ -1515,7 +1515,7 @@ module.exports = function (Engine) {
 		if (!defensive_ground) return false
 		if (count_steps(game, retreating_units) <= 1) return false
 		if (is_turn_event(game, "war_weary_balkans")) {
-			if (retreating_units.some((p) => get_piece_nation(p) === "bu")) return false
+			if (retreating_units.some((p) => piece_counts_as_nation_for_rule(game, p, "bu"))) return false
 		}
 		return true
 	}
