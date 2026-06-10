@@ -910,7 +910,13 @@ module.exports = function (Engine) {
 			can_play: can_play_surprise,
 			on_play_after_disposition(game, ctx) {
 				if (ctx.is_attacker) return
-				game.surprise = { remaining: 2, space: game.attack.space }
+				game.surprise = {
+					remaining: 2,
+					space: game.attack.space,
+					return_state: ctx.return_state,
+					is_attacker: ctx.is_attacker,
+					prev_active: game.active
+				}
 				ctx.mark_effected()
 				game.state = "surprise_sr"
 				return "stop"

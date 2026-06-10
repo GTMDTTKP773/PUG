@@ -1513,11 +1513,17 @@ module.exports = function (Engine) {
 			target_terrain === MOUNTAIN ||
 			trench > 0
 		if (!defensive_ground) return false
-		if (count_steps(game, retreating_units) <= 1) return false
 		if (is_turn_event(game, "war_weary_balkans")) {
 			if (retreating_units.some((p) => piece_counts_as_nation_for_rule(game, p, "bu"))) return false
 		}
-		return true
+		return can_absorb_extra_step_to_cancel_retreat(game, retreating_units)
+	}
+
+	function can_absorb_extra_step_to_cancel_retreat(game, retreating_units) {
+		if (count_steps(game, retreating_units) > 1) return true
+		return retreating_units.some(
+			(p) => is_lcu(p) && is_piece_reduced(game, p) && get_replacement_options(game, p).length > 0
+		)
 	}
 
 	function is_cp_attacking_beachhead(game, target_space, attackers = null) {
@@ -3233,6 +3239,7 @@ module.exports = function (Engine) {
 		if (game.pieces[piece] === target_space) return []
 		let from_space = game.pieces[piece]
 		let faction = get_piece_faction(piece)
+		if (!can_advance_leave_besieged_space(game, piece, from_space, faction)) return []
 		let connected = get_piece_connected_spaces_for_rule(game, from_space, piece)
 		let participated_in_current_attack =
 			game.attack &&
@@ -3251,6 +3258,16 @@ module.exports = function (Engine) {
 		if (!is_region(game, target_space) && contains_enemy_pieces(game, target_space, faction)) return []
 		if (!can_stack_end_in_space(game, target_space, [piece])) return []
 		return [target_space]
+	}
+
+	function can_advance_leave_besieged_space(game, piece, from_space, faction) {
+		if (!(from_space > 0) || !is_besieged(game, from_space)) return true
+		if (get_fort_owner(game, from_space) !== other_faction(faction)) return true
+
+		let remaining = get_pieces_in_space(game, from_space).filter(
+			(p) => p !== piece && get_piece_effective_faction(game, p) === faction
+		)
+		return can_besiege(game, from_space, remaining)
 	}
 
 	function resolve_russian_winter_offensive_advance(game, p, advance_space, log_fn) {
@@ -4994,6 +5011,7 @@ module.exports = function (Engine) {
 		is_turkish_retreat_active,
 		finish_turkish_retreat,
 		cancel_cp_retreat_result,
+		can_cancel_defender_retreat,
 		get_valid_retreat_spaces,
 		apply_retreat_priorities,
 		get_valid_advance_spaces,

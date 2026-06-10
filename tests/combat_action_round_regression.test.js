@@ -233,6 +233,59 @@ function createLcuRetreatCancelGame() {
 	return { game, target, defenderLcu, defenderScu, replacements, reserve }
 }
 
+function createSingleReducedDefenderRetreatCancelGame(defenderName, replacementNames = []) {
+	let game = rules.setup(113, "Historical", { seed: 42, no_supply_warnings: true })
+	let origin = findSpaceByName("Oltu")
+	let target = findSpaceByName("Bayburt")
+	let attacker = findPieceByName("BR IX Corps")
+	let defender = findPieceByName(defenderName)
+	let replacements = replacementNames.map(findPieceByName)
+	let reserve = Engine.game_utils.get_scu_reserve_box(rules.CP)
+
+	for (let p = 0; p < game.pieces.length; p++) game.pieces[p] = 0
+	for (let p of replacements) game.pieces[p] = reserve
+	game.pieces[attacker] = origin
+	game.pieces[defender] = target
+	game.control[origin] = rules.AP
+	game.control[target] = rules.CP
+	game.active = rules.AP
+	game.reduced = [defender]
+	game.retreated = []
+	game.events = {}
+	game.cc_retained = { ap: [], cp: [] }
+	game.cc_retained_after_use = { ap: {}, cp: {} }
+	game.action_state = {}
+	game.combat_cards = { attacker: [], defender: [] }
+	game.combat_cards_effected = []
+	game.post_roll_cc_done = true
+	game.post_battle_cc_done = true
+	game.battle_resolution_side_effects_applied = true
+	game.attack = {
+		space: target,
+		pieces: [attacker],
+		attacker: rules.AP,
+		defender: rules.CP,
+		origin_by_piece: { [attacker]: origin },
+		initial_attackers: [attacker],
+		initial_defenders: [defender]
+	}
+	game.battle_result = {
+		attacker_losses: 0,
+		defender_losses: 2,
+		retreat_needed: true,
+		retreating_faction: rules.CP,
+		retreating_units: [defender],
+		retreat_can_cancel: false,
+		retreat_distance: 1,
+		no_advance: false,
+		attackers: [attacker],
+		defenders: [defender],
+		advance_with_reduced: false
+	}
+
+	return { game, target, defender, replacements, reserve }
+}
+
 function createSpecialUnitDrmGame(active, attackers, defenders) {
 	let game = rules.setup(103, "Historical", { seed: 42, no_supply_warnings: true })
 	let oltu = findSpaceByName("Oltu")
@@ -890,6 +943,39 @@ test("cancelling retreat cancellation restores a manually replaced LCU", () => {
 	expect(game.undo).toHaveLength(0)
 })
 
+test("lone reduced LCU can cancel retreat by breaking down to a reserve SCU", () => {
+	let { game, target, defender, replacements } = createSingleReducedDefenderRetreatCancelGame("TU I Corps", [
+		"TU DIV #10",
+		"TU DIV #11",
+		"TU DIV #12"
+	])
+
+	Engine.combat.end_battle_sequence(game, () => {})
+
+	expect(game.state).toBe("retreat_cancel")
+	expect(game.battle_result.retreat_can_cancel).toBe(true)
+	expect(rules.view(game, CP_ROLE).actions.piece).toContain(defender)
+
+	game = rules.action(game, CP_ROLE, "piece", defender)
+
+	expect(game.state).toBe("choose_lcu_replacement")
+	expect(game.attack.replacement.options).toEqual(replacements)
+
+	game = rules.action(game, CP_ROLE, "piece", replacements[0])
+
+	expect(game.state).toBe("post_retreat_cancel")
+	expect(game.pieces[replacements[0]]).toBe(target)
+})
+
+test("lone reduced SCU cannot cancel retreat with its last step", () => {
+	let { game } = createSingleReducedDefenderRetreatCancelGame("TU DIV #8")
+
+	Engine.combat.end_battle_sequence(game, () => {})
+
+	expect(game.state).toBe("retreat")
+	expect(game.battle_result.retreat_can_cancel).toBe(false)
+})
+
 test("Push to the Breaking Point can be played after the defender cancels retreat", () => {
 	let { game, defender1 } = createMaudeRetreatCancelGame("Bayburt", "Oltu")
 	let ptbp = findCardByEvent("PUSH TO THE BREAKING POINT CC")
@@ -1412,6 +1498,42 @@ test("besieging unit may attack out if remaining units still maintain the siege"
 	let targets = Engine.combat.get_legal_attackable_spaces(game, selected, rules.CP, () => "winter", () => true)
 	expect(targets).toContain(kars)
 	expect(targets).toContain(sarikamis)
+})
+
+test("advancing out of a besieged fort must leave enough units to maintain the siege", () => {
+	let { game, kars, sarikamis, attackers } = createBesiegedFortMaintenanceGame([
+		"TU DIV #1",
+		"TU DIV #2",
+		"TU DIV #3",
+		"TU DIV #4"
+	])
+	let defender = findPieceByName("RU DIV #3")
+	game.pieces[defender] = 0
+	game.state = "advance"
+	game.attack = {
+		space: sarikamis,
+		pieces: attackers.slice(0, 2),
+		attacker: rules.CP,
+		defender: rules.AP,
+		origin_by_piece: Object.fromEntries(attackers.slice(0, 2).map((p) => [p, kars]))
+	}
+	game.battle_result = { retreat_distance: 1 }
+	game.advance_space = sarikamis
+	game.advance_pieces = attackers.slice(0, 2)
+	game.advance_count = 0
+	game.advance_limit = 3
+	game.retreated = []
+	game.undo = []
+
+	expect(Engine.map.is_besieged(game, kars)).toBe(true)
+	expect(Engine.combat.get_valid_advance_spaces(game, attackers[0], sarikamis)).toEqual([sarikamis])
+
+	game = rules.action(game, CP_ROLE, "piece", attackers[0])
+
+	expect(game.pieces[attackers[0]]).toBe(sarikamis)
+	expect(Engine.map.is_besieged(game, kars)).toBe(true)
+	expect(Engine.combat.get_valid_advance_spaces(game, attackers[1], sarikamis)).toEqual([])
+	expect(rules.view(game, CP_ROLE).actions.piece || []).not.toContain(attackers[1])
 })
 
 test("besieging units cannot move out if remaining units cannot maintain the siege", () => {

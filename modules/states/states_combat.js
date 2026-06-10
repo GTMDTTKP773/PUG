@@ -56,7 +56,6 @@ exports.register = function (states, Engine, context) {
 		reduce_piece,
 		get_piece_lf,
 		replace_lcu_with_scu,
-		count_steps,
 		get_advance_pieces,
 		get_valid_retreat_spaces,
 		get_valid_advance_spaces,
@@ -1605,7 +1604,7 @@ exports.register = function (states, Engine, context) {
 	states.surprise_sr = {
 		prompt(res) {
 			if (!game.surprise) {
-				game.surprise = { remaining: 2, space: game.attack.space }
+				game.surprise = { remaining: 2, space: game.attack.space, return_state: "play_cc_defender", is_attacker: false }
 			}
 			res.prompt(`奇袭增援：可增援 ${game.surprise.remaining} 个SCU到 ${space_name(game.surprise.space)}`)
 			if (game.attack && game.attack.space !== -1) {
@@ -1628,17 +1627,27 @@ exports.register = function (states, Engine, context) {
 		},
 		piece(p) {
 			push_undo()
-			game.pieces[p] = game.surprise.space
+			let from = game.pieces[p]
+			let target = game.surprise.space
+			game.pieces[p] = target
+			log(`惊喜：${piece_name(p)} 战略调整：${space_name(from)} → ${space_name(target)}`)
 			game.surprise.remaining -= 1
 			if (game.surprise.remaining <= 0) {
-				delete game.surprise
-				resolve_battle_sequence()
+				finish_surprise_sr()
 			}
 		},
 		done() {
-			delete game.surprise
-			resolve_battle_sequence()
+			finish_surprise_sr()
 		}
+	}
+
+	function finish_surprise_sr() {
+		let return_state = game.surprise?.return_state || "play_cc_defender"
+		let is_attacker = !!game.surprise?.is_attacker
+		let prev_active = game.surprise?.prev_active || game.attack?.defender || CP
+		delete game.surprise
+		game.active = prev_active
+		resume_combat_card_flow(return_state, is_attacker)
 	}
 
 	function can_confused_orders_move_piece_to_space(p, target) {
@@ -3485,8 +3494,13 @@ exports.register = function (states, Engine, context) {
 	states.retreat_cancel = {
 		prompt(res) {
 			res.prompt("防守方可以额外承受 1 级损失以取消撤退")
-			let steps = count_steps(game, game.retreat_pieces)
-			if (steps > 1) {
+			let can_cancel = combat.can_cancel_defender_retreat(
+				game,
+				game.attack?.space,
+				game.battle_result?.retreating_faction,
+				game.retreat_pieces || []
+			)
+			if (can_cancel) {
 				for (let p of game.retreat_pieces) {
 					res.piece(p)
 				}
@@ -3496,6 +3510,16 @@ exports.register = function (states, Engine, context) {
 			res.action("proceed_retreat")
 		},
 		piece(p) {
+			if (!set_has(game.retreat_pieces || [], p)) return
+			if (
+				!combat.can_cancel_defender_retreat(
+					game,
+					game.attack?.space,
+					game.battle_result?.retreating_faction,
+					game.retreat_pieces || []
+				)
+			)
+				return
 			let undo_depth = game.undo?.length || 0
 			push_undo()
 			game.retreat_cancel_undo_depth = undo_depth
