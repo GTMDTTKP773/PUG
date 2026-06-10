@@ -2731,6 +2731,13 @@ const UI_FRAME_STATE_FIELDS = [
 	},
 	{ key: "forts_destroyed", diff: "space_set", build: () => to_id_set(view?.forts?.destroyed) },
 	{ key: "forts_besieged", diff: "space_set", build: () => to_id_set(view?.forts?.besieged) },
+	{
+		key: "activation_cost",
+		diff: "control_map",
+		build: () =>
+			view?.activation_cost && typeof view.activation_cost === "object" ? view.activation_cost : null,
+		snapshot: (value) => (value ? { ...value } : null)
+	},
 	{ key: "armenian_uprising_markers", diff: "space_set", build: () => to_id_set(view?.armenian_uprising_markers) },
 	{ key: "persian_uprising_markers", diff: "space_set", build: () => to_id_set(view?.persian_uprising_markers) },
 	{ key: "soviet_uprising_markers", diff: "space_set", build: () => to_id_set(view?.soviet_uprising_markers) },
@@ -2752,7 +2759,19 @@ const UI_FRAME_STATE_FIELDS = [
 	{ key: "action_space", diff: "space_set", build: () => to_loose_id_set(view?.actions?.space) },
 	{ key: "action_activate_move", diff: "space_set", build: () => to_loose_id_set(view?.actions?.activate_move) },
 	{ key: "action_activate_attack", diff: "space_set", build: () => to_loose_id_set(view?.actions?.activate_attack) },
+	{
+		key: "action_activate_attack_egypt",
+		diff: "space_set",
+		build: () => to_loose_id_set(view?.actions?.activate_attack_egypt)
+	},
+	{
+		key: "action_activate_attack_with_br",
+		diff: "space_set",
+		build: () => to_loose_id_set(view?.actions?.activate_attack_with_br)
+	},
 	{ key: "action_deactivate", diff: "space_set", build: () => to_loose_id_set(view?.actions?.deactivate) },
+	{ key: "action_combine", diff: "space_set", build: () => to_loose_id_set(view?.actions?.combine) },
+	{ key: "action_remove_beachhead", diff: "space_set", build: () => to_loose_id_set(view?.actions?.remove_beachhead) },
 	{ key: "action_piece", diff: "piece_set", build: () => to_loose_id_set(view?.actions?.piece) },
 	{ key: "action_attack_piece", diff: "piece_set", build: () => to_loose_id_set(view?.actions?.attack) },
 	{ key: "action_move_piece", diff: "piece_set", build: () => to_loose_id_set(view?.actions?.move) },
@@ -5222,14 +5241,22 @@ function should_highlight_space(s, state = null) {
 			has_loose_id(state.action_space, s) ||
 			has_loose_id(state.action_activate_move, s) ||
 			has_loose_id(state.action_activate_attack, s) ||
-			has_loose_id(state.action_deactivate, s)
+			has_loose_id(state.action_activate_attack_egypt, s) ||
+			has_loose_id(state.action_activate_attack_with_br, s) ||
+			has_loose_id(state.action_deactivate, s) ||
+			has_loose_id(state.action_combine, s) ||
+			has_loose_id(state.action_remove_beachhead, s)
 		)
 	}
 	return (
 		is_action("space", s) ||
 		is_action("activate_move", s) ||
 		is_action("activate_attack", s) ||
-		is_action("deactivate", s)
+		is_action("activate_attack_egypt", s) ||
+		is_action("activate_attack_with_br", s) ||
+		is_action("deactivate", s) ||
+		is_action("combine", s) ||
+		is_action("remove_beachhead", s)
 	)
 }
 
@@ -5353,6 +5380,7 @@ function has_space_special_marker(space, state, s) {
 		has_id(state.trenches, s) ||
 		has_id(state.beachheads, s) ||
 		has_id(state.forts_destroyed, s) ||
+		has_id(state.forts_besieged, s) ||
 		has_id(state.armenian_uprising_markers, s) ||
 		has_id(state.persian_uprising_markers, s) ||
 		has_id(state.soviet_uprising_markers, s) ||
@@ -5430,6 +5458,16 @@ function get_space_activation_marker_count(s) {
 	return Math.max(1, view_map_get(view.activation_cost, s, 1))
 }
 
+function sync_activation_markers(s, type, count, stack_parts) {
+	const marker_list = get_space_marker_list(s)
+	destroy_markers(marker_list, (marker) => {
+		return (marker.type === "move" || marker.type === "attack") && (marker.type !== type || marker.ix >= count)
+	})
+	for (let i = 0; i < count; i++) {
+		stack_parts.top_markers.push(build_activation_marker(s, type, i))
+	}
+}
+
 function render_space_markers(space, state, s, stack_parts) {
 	sync_control_marker(s, get_control_marker_type(space, state, s), stack_parts)
 
@@ -5484,19 +5522,12 @@ function render_space_markers(space, state, s, stack_parts) {
 	}
 
 	if (view.activated) {
-		const marker_list = get_space_marker_list(s)
 		if (has_id(state.activated_move_spaces, s)) {
-			destroy_marker(marker_list, (marker) => marker.type === "attack")
 			const count = get_space_activation_marker_count(s)
-			for (let i = 0; i < count; i++) {
-				stack_parts.top_markers.push(build_activation_marker(s, "move", i))
-			}
+			sync_activation_markers(s, "move", count, stack_parts)
 		} else if (has_id(state.activated_attack_spaces, s)) {
-			destroy_marker(marker_list, (marker) => marker.type === "move")
 			const count = get_space_activation_marker_count(s)
-			for (let i = 0; i < count; i++) {
-				stack_parts.top_markers.push(build_activation_marker(s, "attack", i))
-			}
+			sync_activation_markers(s, "attack", count, stack_parts)
 		} else {
 			destroy_activation_markers(s)
 		}

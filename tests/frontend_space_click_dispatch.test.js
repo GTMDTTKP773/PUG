@@ -145,3 +145,23 @@ test("map-space clicks may dispatch explicit map-space actions", () => {
 	expect(is_map_space_click_action("propose_rollback")).toBe(false)
 	expect(get_space_click_intent(5)).toEqual({ type: "send_action", action: "combine" })
 })
+
+test("map-space clicks dispatch Egypt-only attack and beachhead removal actions directly", () => {
+	let helpers = loadSpaceClickHelpers({
+		actions: {
+			activate_attack_egypt: [5]
+		},
+		activated: {}
+	})
+
+	expect(helpers.get_space_click_intent(5)).toEqual({ type: "send_action", action: "activate_attack_egypt" })
+
+	helpers = loadSpaceClickHelpers({
+		actions: {
+			remove_beachhead: [5]
+		},
+		activated: {}
+	})
+
+	expect(helpers.get_space_click_intent(5)).toEqual({ type: "send_action", action: "remove_beachhead" })
+})
