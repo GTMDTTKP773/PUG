@@ -264,8 +264,20 @@ function hide_supply() {
 }
 
 let focus_key = null
+let focus_is_reinforcement_board = false
 let focus_box = document.getElementById("focus")
 let pending_focus_dirty_spaces = null
+
+function hide_focus_box() {
+	if (focus_box) {
+		focus_box.style.display = "none"
+	}
+}
+
+function focus_box_is_on_reinforcement_board() {
+	const parent = focus_box && focus_box.parentNode
+	return !!(parent && (parent.id === "ap_reinforcements" || parent.id === "cp_reinforcements"))
+}
 
 function normalize_tribe_reserve_name(name) {
 	return String(name || "")
@@ -355,6 +367,13 @@ function get_eliminated_box_side(space_id) {
 function get_stack_key(stack) {
 	if (!stack) {
 		return null
+	}
+	if (stack.is_reinforcement_board) {
+		const x = Number(stack.x)
+		const y = Number(stack.y)
+		if (Number.isFinite(x) && Number.isFinite(y)) {
+			return `reinforcement:${stack.side || ""}:${x}:${y}:${stack.name || ""}`
+		}
 	}
 	// 优先使用显式名称，这是最稳定的 ID
 	if (stack.name) {
@@ -3206,6 +3225,7 @@ function ensure_slot_stack(slot, slot_stacks, stack_by_coord) {
 			stack = Array.isArray(slot.stack) ? slot.stack : []
 			stack.name = stack.name || slot.name
 			stack.is_reinforcement = true
+			stack.is_reinforcement_board = true
 			stack.x = slot.x
 			stack.y = slot.y
 			stack.side = slot.side
@@ -3216,6 +3236,7 @@ function ensure_slot_stack(slot, slot_stacks, stack_by_coord) {
 		}
 		slot.stack = stack
 		stack.is_reinforcement = true
+		stack.is_reinforcement_board = true
 		return stack
 	}
 	if (!slot.stack) {
@@ -3227,6 +3248,7 @@ function ensure_slot_stack(slot, slot_stacks, stack_by_coord) {
 		slot.stack.side = slot.side
 	}
 	slot.stack.is_reinforcement = true
+	slot.stack.is_reinforcement_board = true
 	if (slot.stack.length === 0 && Array.isArray(slot_stacks)) {
 		slot_stacks.push({ stack: slot.stack, x: slot.x, y: slot.y })
 	}
@@ -3505,6 +3527,7 @@ function update_reinforcements() {
 		stack.y = y
 		stack.side = entry.side
 		stack.is_reinforcement = true
+		stack.is_reinforcement_board = true
 
 		bind_stack_interaction(stack)
 
@@ -3519,6 +3542,12 @@ function update_reinforcements() {
 	// 确保聚焦标记（focus_box）在 UI 更新后仍然存在并绑定
 	if (current_focus_stack) {
 		layout_stack(current_focus_stack, current_focus_stack.x, current_focus_stack.y)
+	} else if (focus_is_reinforcement_board) {
+		focus_key = null
+		focus_is_reinforcement_board = false
+		hide_focus_box()
+	} else if (focus_box_is_on_reinforcement_board()) {
+		hide_focus_box()
 	}
 
 	for (let i = 0; i < spaces.length; ++i) {
@@ -3568,9 +3597,14 @@ const MINY = 50
  * 取消当前堆栈的聚焦状态。
  */
 function blur_stack() {
+	const had_focus = focus_key !== null
 	if (focus_key !== null) {
 		mark_focus_dirty_by_key(focus_key)
 		focus_key = null
+		focus_is_reinforcement_board = false
+	}
+	hide_focus_box()
+	if (had_focus) {
 		on_update()
 	}
 }
@@ -3599,9 +3633,11 @@ function focus_stack(stack) {
 		mark_focus_dirty_by_key(focus_key)
 		mark_focus_dirty_by_stack(stack)
 		focus_key = key
+		focus_is_reinforcement_board = !!stack.is_reinforcement_board
 		on_update()
 		return is_small_stack(stack)
 	}
+	focus_is_reinforcement_board = !!stack.is_reinforcement_board
 	return true
 }
 
@@ -3617,7 +3653,7 @@ function layout_stack(stack, start_x, start_y) {
 	}
 
 	const dim = style_dims[style]
-	const focused = is_stack_focused(stack)
+	let focused = is_stack_focused(stack)
 	let z = focused ? 101 : 1
 
 	const dx = stack.length > 5 ? dim.stack_dx_tight : dim.stack_dx
@@ -3627,6 +3663,9 @@ function layout_stack(stack, start_x, start_y) {
 	// Lose focus if stack is small.
 	if (focused && is_small_stack(stack) && !stack.is_reinforcement) {
 		focus_key = null
+		focus_is_reinforcement_board = false
+		focused = false
+		hide_focus_box()
 	}
 
 	if (focused) {
@@ -5608,6 +5647,12 @@ function update_space(s, pieces_in_this_space) {
 	const marker_list = ui.space_list[s] && ui.space_list[s].markers
 	const has_existing_markers = !!(marker_list && marker_list.length > 0)
 
+	if (stack.length === 0 && is_stack_focused(stack)) {
+		focus_key = null
+		focus_is_reinforcement_board = false
+		hide_focus_box()
+	}
+
 	if (!has_pieces && !has_special_marker && !has_existing_markers && stack.length === 0) {
 		update_space_highlight(s)
 		return
@@ -6227,6 +6272,18 @@ function on_click_piece(e, p) {
 	}
 }
 
+function on_reinforcements_background_mouse_down(evt) {
+	if (evt.button !== 0) {
+		return
+	}
+	const target = evt.target
+	if (target && target.closest && target.closest(".piece, .marker, .space")) {
+		return
+	}
+	hide_supply()
+	blur_stack()
+}
+
 const map = document.getElementById("map")
 if (map) {
 	map.addEventListener("contextmenu", (e) => e.preventDefault())
@@ -6239,6 +6296,11 @@ if (map) {
 			hide_supply()
 		}
 	})
+}
+
+const reinforcements_container = document.getElementById("reinforcements")
+if (reinforcements_container) {
+	reinforcements_container.addEventListener("mousedown", on_reinforcements_background_mouse_down)
 }
 
 // CARD MENU

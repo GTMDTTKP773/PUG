@@ -127,3 +127,83 @@ test("map-space action highlights track all direct map click actions", () => {
 		expect(context.should_highlight_space(42, { [key]: new Set([42]) })).toBe(true)
 	}
 })
+
+test("reinforcement board stack focus uses stable coordinates and clears the focus mask", () => {
+	const source = getPlaySource()
+	const context = {}
+	vm.createContext(context)
+	vm.runInContext(
+		`${extractFunction(source, "get_stack_key")}
+		globalThis.get_stack_key = get_stack_key`,
+		context
+	)
+
+	const first = []
+	first.name = "Trench"
+	first.side = "ap"
+	first.x = 100
+	first.y = 200
+	first.is_reinforcement_board = true
+
+	const second = []
+	second.name = "Trench"
+	second.side = "ap"
+	second.x = 100
+	second.y = 260
+	second.is_reinforcement_board = true
+
+	expect(context.get_stack_key(first)).toBe("reinforcement:ap:100:200:Trench")
+	expect(context.get_stack_key(second)).toBe("reinforcement:ap:100:260:Trench")
+	expect(context.get_stack_key(first)).not.toBe(context.get_stack_key(second))
+	expect(source).toContain("function hide_focus_box()")
+	expect(source).toContain("hide_focus_box()")
+	expect(source).toContain("on_reinforcements_background_mouse_down")
+	expect(source).toContain('addEventListener("mousedown", on_reinforcements_background_mouse_down)')
+})
+
+test("empty focused map stacks clear the focus mask during update_space", () => {
+	const source = getPlaySource()
+	const start = source.indexOf("function update_space(")
+	if (start < 0) {
+		throw new Error("Could not find update_space in play.js")
+	}
+	const brace = source.indexOf("{", start)
+	let depth = 0
+	let end = brace
+	for (; end < source.length; end++) {
+		if (source[end] === "{") depth += 1
+		if (source[end] === "}") {
+			depth -= 1
+			if (depth === 0) {
+				end += 1
+				break
+			}
+		}
+	}
+	const context = {
+		spaces: [null, { element: {}, name: "A", stack: [] }],
+		ui: { space_list: [null, {}] },
+		get_active_ui_frame_state: () => ({}),
+		has_space_special_marker: () => false,
+		update_space_highlight: () => {}
+	}
+	context.is_stack_focused = (stack) => stack === context.spaces[1].stack
+	context.hide_focus_box = () => {
+		context.hidden = (context.hidden || 0) + 1
+	}
+	context.focus_key = "stack:A"
+	context.focus_is_reinforcement_board = true
+
+	vm.createContext(context)
+	vm.runInContext(
+		`${source.slice(start, end)}
+		globalThis.update_space = update_space`,
+		context
+	)
+
+	context.update_space(1, [])
+
+	expect(context.focus_key).toBeNull()
+	expect(context.focus_is_reinforcement_board).toBe(false)
+	expect(context.hidden).toBe(1)
+})

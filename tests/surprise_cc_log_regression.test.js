@@ -43,6 +43,43 @@ function createSurpriseCcGame() {
 	return { game, basra, haifa, reinforcement }
 }
 
+function createMedinaSurpriseGameWithoutSrCandidate() {
+	let game = setupGame(2026061002, "Historical", { no_supply_warnings: true })
+	let medina = findSpace("Medina")
+	let yenbo = findSpace("Yenbo")
+	let attacker = findPiece("Arab Revolt #1")
+	let defender = findPiece("TU DIV #8")
+
+	clearBoard(game)
+	game.pieces[attacker] = yenbo
+	game.pieces[defender] = medina
+	game.control[medina] = rules.CP
+	game.active = rules.CP
+	game.state = "play_cc_defender"
+	game.hand_cp = [SURPRISE]
+	game.combat_cards = { attacker: [], defender: [] }
+	game.combat_cards_effected = []
+	game.cc_retained = { ap: [], cp: [] }
+	game.cc_retained_after_use = { ap: {}, cp: {} }
+	game.action_state = {}
+	game.attack = {
+		space: medina,
+		pieces: [attacker],
+		attacker: rules.AP,
+		defender: rules.CP
+	}
+
+	return game
+}
+
+test("Surprise is unavailable when no TU/TU-A SCU can SR into the defender space", () => {
+	let game = createMedinaSurpriseGameWithoutSrCandidate()
+
+	expect(Engine.combat_cards.get_surprise_sr_piece_options(game)).toEqual([])
+	expect(Engine.combat_cards.can_play_surprise(game)).toBe(false)
+	expect(rules.view(game, CP_ROLE).actions.play_cc || []).not.toContain(SURPRISE)
+})
+
 test("Surprise returns to the defender CC window and logs its combat card summary", () => {
 	let { game, basra, haifa, reinforcement } = createSurpriseCcGame()
 

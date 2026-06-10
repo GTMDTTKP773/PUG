@@ -326,6 +326,26 @@ module.exports = function (Engine) {
 		return is_desert_or_swamp_battle(game)
 	}
 
+	function can_surprise_sr_piece(game, p, target = game.attack?.space) {
+		if (!(target > 0 && data.spaces[target])) return false
+		let info = data.pieces[p]
+		if (!info) return false
+		if (get_piece_effective_faction(game, p) !== CP) return false
+		if (info.nation !== "tu" && info.nation !== "tua") return false
+		if (!game_utils.is_scu(p)) return false
+		if (game_utils.is_not_on_map(game, p) && !game_utils.is_in_reserve(game, p)) return false
+		if (game.pieces[p] === target) return false
+		return map.can_sr_to_space(game, p, target, CP)
+	}
+
+	function get_surprise_sr_piece_options(game, target = game.attack?.space) {
+		let options = []
+		for (let p = 0; p < data.pieces.length; p++) {
+			if (can_surprise_sr_piece(game, p, target)) options.push(p)
+		}
+		return options
+	}
+
 	function can_play_surprise(game) {
 		if (!has_attack(game)) return false
 		if (game.events && game.events["royal_flying_corps_permanent"]) return false
@@ -337,7 +357,7 @@ module.exports = function (Engine) {
 		if (game.active !== CP) return false
 
 		let area = map.get_area(game.attack.space)
-		return SURPRISE_AREAS.has(area)
+		return SURPRISE_AREAS.has(area) && get_surprise_sr_piece_options(game).length > 0
 	}
 
 	function can_play_water_shortage(game) {
@@ -1091,6 +1111,7 @@ module.exports = function (Engine) {
 		can_play_maude,
 		can_play_armored_cars,
 		can_play_sandstorms,
+		get_surprise_sr_piece_options,
 		can_play_surprise,
 		can_play_water_shortage,
 		can_play_confused_orders,

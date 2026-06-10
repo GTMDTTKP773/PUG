@@ -1613,16 +1613,8 @@ exports.register = function (states, Engine, context) {
 			}
 			res.action("done")
 			let target = game.surprise.space
-			for (let p = 0; p < data.pieces.length; p++) {
-				if (!data.pieces[p]) continue
-				if (Engine.game_utils.get_piece_effective_faction(game, p) !== CP) continue
-				if (!["tu", "tua"].includes(data.pieces[p].nation)) continue
-				if (!is_scu(p)) continue
-				if (is_not_on_map(game, p) && !is_in_reserve(game, p)) continue
-				if (!can_stack_end_in_space(game, target, [p])) continue
-				if (game.pieces[p] !== target && Engine.map.can_sr_to_space(game, p, target, CP)) {
-					res.piece(p)
-				}
+			for (let p of combat_cards.get_surprise_sr_piece_options(game, target)) {
+				res.piece(p)
 			}
 		},
 		piece(p) {

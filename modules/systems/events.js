@@ -1662,6 +1662,11 @@ module.exports = function (Engine) {
 		return entry
 	}
 
+	function can_play_combat_card_entry(game, card_id) {
+		if (!Engine.combat_cards || typeof Engine.combat_cards.can_play_combat_card !== "function") return false
+		return Engine.combat_cards.can_play_combat_card(game, card_id)
+	}
+
 	/**
 	 * 确保游戏实例中有增援记录
 	 * @param {object} game
@@ -2575,7 +2580,7 @@ module.exports = function (Engine) {
 			effect_cn:
 				"(只有在协约国在塞尔维亚或保加利亚至少控制了1个地区时打出。不能在1917年冬季前打出)。一回合一次，一次对保加利亚部队的攻击+1drm。在本次战斗及本回合的剩余时间内，包含保加利亚部队的堆叠无法取消撤退。",
 			can_play: function (game) {
-				return game.turn >= 13
+				return can_play_combat_card_entry(game, 44)
 			},
 			handler: function (game) {
 				game.events["war_weary_balkans"] = game.turn
@@ -2700,7 +2705,7 @@ module.exports = function (Engine) {
 			effect_cn:
 				"(只能在【艾伦比】后打出)。在一次攻击胜利后，参与本次战斗的满员的英国/印度/澳新部队(可以在挺进后)可以立即被再度启动来进行一次额外的攻击。",
 			can_play: function (game) {
-				return game.events["allenby"]
+				return can_play_combat_card_entry(game, 50)
 			},
 			handler: function (game) {
 				game.events["push_to_breaking_point"] = game.turn
@@ -2712,7 +2717,7 @@ module.exports = function (Engine) {
 			effect_cn:
 				"(只能在【艾伦比】后打出)。一次包含了英国LCU的攻击中，协约国部队可以首先开火并取消所有地形效果。",
 			can_play: function (game) {
-				return game.events["allenby"]
+				return can_play_combat_card_entry(game, 51)
 			},
 			handler: function (game) {
 				game.events["haversack_ruse"] = game.turn
@@ -2724,7 +2729,7 @@ module.exports = function (Engine) {
 			effect_cn:
 				"(只能在【艾伦比】后打出)。一个没有在本次行动轮中被启动的英国单位(SCU、LCU或者HQ)可以立即被启动并移动穿过1-2个协约国控制地区加入本次战斗(需要满足堆叠限制)。本次战斗获得+1drm。",
 			can_play: function (game) {
-				return game.events["allenby"]
+				return can_play_combat_card_entry(game, 52)
 			},
 			handler: function (game) {
 				game.events["march_and_countermarch"] = game.turn
@@ -3334,24 +3339,7 @@ module.exports = function (Engine) {
 			effect_cn:
 				"(只能在防守部队位于美索不达米亚、叙利亚/巴勒斯坦或者西奈时才能打出)(不能在【皇家空军】后打出)同盟国可以立即将1-2个土耳其/土耳其-阿拉伯师的战略调整至防守地区。这次行动不被计入战略调整。(意味着下一个行动轮同盟国玩家还可以选择进行战略调整行动)",
 			can_play: function (game) {
-				// CC cards played as events must meet the same conditions as CC
-				if (!game.attack) return false
-				if (game.active !== CP) return false
-				if (game.events && game.events["royal_flying_corps_permanent"]) return false
-
-				// Surprise is defender only (when played during combat)
-				// Note: in RTT combat sequence, game.active is the defender when playing defender CCs.
-				// However, if this is called via an Event action, game.active is the attacker!
-				// But we check has_attack(game), which is only true during combat.
-				// If we are in combat, game.active is the player whose turn it is to play CC.
-				// So if it's the defender's turn to play CC, game.active is the defender.
-				let is_active_attacker = game.attack.pieces.some(
-					(p) => Engine.game_utils.get_piece_effective_faction(game, p) === game.active
-				)
-				if (is_active_attacker) return false
-
-				let area = Engine.map.get_area(game.attack.space)
-				return ["mesopotamia", "syria_palestine", "sinai"].includes(area)
+				return can_play_combat_card_entry(game, 74)
 			},
 			handler: function (game) {
 				game.events["surprise"] = game.turn
@@ -3376,7 +3364,7 @@ module.exports = function (Engine) {
 			name_cn: "飞行分队",
 			effect_cn: "(不能在协约国打出【皇家空军】后打出)一次同盟国攻击/防御+1drm。",
 			can_play: function (game) {
-				return !(game.events && game.events["royal_flying_corps_permanent"])
+				return can_play_combat_card_entry(game, 76)
 			},
 			handler: function (game) {
 				game.events["fliegerabteilung"] = game.turn
@@ -3731,7 +3719,7 @@ module.exports = function (Engine) {
 			effect_cn:
 				"(只能在俄国革命开始后，且在本次战斗中俄国境内VP被同盟国部队挺进占领时，挺进结束后才能打出)。同盟国立即获得4点土耳其补员点数来给高加索、俄国或者阿塞拜疆的土耳其部队补员。",
 			can_play: function (game) {
-				return game.events["russian_revolution"]
+				return can_play_combat_card_entry(game, 97)
 			},
 			handler: function (game) {
 				game.rp_cp.tu += 4
@@ -3752,7 +3740,7 @@ module.exports = function (Engine) {
 			effect_cn:
 				"(只能在【泛突厥主义】后、圣战等级不小于6时打出)。- **在战斗开始前，**增援:HQ:土耳其伊斯兰军，至任何被启动进行攻击的高加索、俄国、阿塞拜疆或者中立波斯的土耳其/土耳其-阿拉伯部队。。- 仅在这次战斗中，同盟国可以首先开火。",
 			can_play: function (game) {
-				return game.events["pan_turkism"] && game.jihad >= 6
+				return can_play_combat_card_entry(game, 99)
 			},
 			handler: function (game) {
 				reinforce(game, "TU Army Islam HQ", CP)
