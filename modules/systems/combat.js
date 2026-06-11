@@ -3885,9 +3885,7 @@ module.exports = function (Engine) {
 
 		// Rule 337: "?" loss value determination for current combat
 		game.attack.piece_lf = {}
-		let variable_loss_pieces = [...attackers, ...defenders].filter(
-			(p) => data.pieces[p].lf === null || data.pieces[p].lf === "?"
-		)
+		let variable_loss_pieces = [...attackers, ...defenders].filter((p) => is_variable_loss_piece(game, p))
 		for (let p of variable_loss_pieces) {
 			let roll = roll_die(6, game)
 			game.attack.piece_lf[p] = roll

@@ -83,3 +83,41 @@ test("? LF attackers become eligible after another same-space unit takes a loss"
 	expect(view.actions.piece).toContain(stankeBey)
 	expect(view.actions.done).toBeUndefined()
 })
+
+test("reduced ? LF units use reduced LF instead of rolling variable LF", () => {
+	const game = setupGame(260509, "Historical", { no_supply_warnings: true })
+	const origin = findSpace("Oltu")
+	const target = findSpace("Bayburt")
+	const stankeBey = findPieceByName("TU Stanke Bey")
+	const defender = findPieceByName("RU DIV #3")
+	const logs = []
+
+	clearBoard(game)
+	game.pieces[stankeBey] = origin
+	game.pieces[defender] = target
+	game.control[origin] = CP
+	game.control[target] = AP
+	game.active = CP
+	game.state = "resolve_battle"
+	game.seed = 7
+	game.reduced = [stankeBey]
+	game.retreated = []
+	game.events = {}
+	game.combat_cards = { attacker: [], defender: [] }
+	game.combat_cards_effected = []
+	game.attack = {
+		space: target,
+		pieces: [stankeBey],
+		attacker: CP,
+		defender: AP,
+		origin_by_piece: {
+			[stankeBey]: origin
+		}
+	}
+
+	Engine.combat.resolve_battle_sequence(game, { log: (msg) => logs.push(msg), check_mo_fulfillment: () => {} })
+
+	expect(logs.join("\n")).not.toContain("血量掷骰")
+	expect(game.attack.piece_lf[stankeBey]).toBeUndefined()
+	expect(Engine.combat.get_piece_lf(game, stankeBey)).toBe(1)
+})
