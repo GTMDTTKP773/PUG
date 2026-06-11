@@ -4741,13 +4741,11 @@ module.exports = function (Engine) {
 			if (log_fn) log_fn(msg)
 		}
 
-		function log_fire(faction, cf, roll, drm, final_roll, losses, table, shifts) {
+		function log_fire(faction, cf, roll, drm, losses, table, shifts) {
 			let col = find_fire_column(table === fire_table.lcu ? "lcu" : "scu", cf, shifts)
-			let name = faction === game.active ? "Attacker" : "Defender"
-			log(`*${name}'s fire (${cf} CF):`)
-			log(
-				`> \u2680 \u00d7 ${roll}${drm >= 0 ? "+" : ""}${drm} = ${final_roll}(${col.name}) \u2192 ${losses} Losses`
-			)
+			let name = faction === game.active ? "进攻方" : "防守方"
+			log(`**${name}开火 (${cf} CF)：**`)
+			log(`> ${fmt_roll(roll, drm, faction)} × ${col.name} = ${losses}`)
 		}
 
 		if (result.att_fire_first) {
@@ -4771,7 +4769,6 @@ module.exports = function (Engine) {
 				def_cf,
 				def_roll,
 				result.def_drm,
-				def_final_roll,
 				att_losses,
 				def_table,
 				result.def_shifts
@@ -4798,7 +4795,6 @@ module.exports = function (Engine) {
 				att_cf,
 				att_roll,
 				result.att_drm,
-				att_final_roll,
 				def_losses,
 				att_table,
 				result.att_shifts
