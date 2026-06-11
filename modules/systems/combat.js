@@ -1125,6 +1125,7 @@ module.exports = function (Engine) {
 
 	function attacker_ignores_persistent_trench_effects(game, attackers = null, target_space = null) {
 		return (
+			attacker_has_haversack_ruse_terrain_ignore(game, attackers) ||
 			attacker_has_massed_cavalry_desert_ignore(game, attackers) ||
 			attacker_has_maude_trench_ignore(game, target_space)
 		)
@@ -3916,8 +3917,9 @@ module.exports = function (Engine) {
 					if (attackers.some((p) => is_lcu(p) && data.pieces[p].nation === "br")) {
 						att_fire_first = true
 						ignore_terrain = true
+						ignore_trench = true
 						mark_effected(CC_AP_HAVERSACK_RUSE)
-						log_detail(log, "背包计谋：进攻方率先开火且忽略地形效果")
+						log_detail(log, "背包计谋：进攻方率先开火且忽略地形与战壕效果")
 					}
 				}
 				if (game.combat_cards.attacker.includes(CC_AP_MASSED_CAVALRY_CHARGE)) {

@@ -435,7 +435,9 @@ module.exports = function (Engine) {
 
 	function can_play_haversack_ruse(game) {
 		let in_allowed_window =
-			can_play_in_window(game, "pre_weather_cc_attacker", AP) || can_play_in_standard_cc_window(game, AP)
+			can_play_in_window(game, "pre_flank_cc_attacker", AP) ||
+			can_play_in_window(game, "pre_weather_cc_attacker", AP) ||
+			can_play_in_standard_cc_window(game, AP)
 		if (!in_allowed_window) return false
 		if (!(game.events && game.events["allenby"])) return false
 		return attacker_has_piece(game, (p) => data.pieces[p].nation === "br" && map.is_lcu(p))
@@ -729,6 +731,10 @@ module.exports = function (Engine) {
 		return combat.can_battle_trigger_severe_weather(game) ? PRE_WEATHER_BOTH_SIDES_CC_WINDOWS : STANDARD_CC_WINDOWS
 	}
 
+	function get_haversack_ruse_windows(game) {
+		return new Set([...PRE_FLANK_ATTACKER_CC_WINDOWS, ...get_pre_weather_attacker_windows(game)])
+	}
+
 	// 战斗卡规格表：统一收敛窗口、判定、修正值与打出后的即时效果。
 	// 这里的窗口需要严格战斗卡的战斗时序，天气前、掷骰后与撤退选择阶段。
 	const COMBAT_CARD_SPECS = {
@@ -856,7 +862,7 @@ module.exports = function (Engine) {
 			}
 		},
 		[combat.CC_AP_HAVERSACK_RUSE]: {
-			windows: get_pre_weather_attacker_windows,
+			windows: get_haversack_ruse_windows,
 			can_play: can_play_haversack_ruse
 		},
 		[combat.CC_AP_MARCH_AND_COUNTERMARCH]: {

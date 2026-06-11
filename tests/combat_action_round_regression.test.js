@@ -440,6 +440,27 @@ test("Massed Cavalry Charge is playable before flank declaration and can unlock 
 	expect(game.state).toBe("choose_flank_attack")
 })
 
+test("Haversack Ruse can unlock flank past trenches", () => {
+	let { game, ctesiphon } = createMassedCavalryPreFlankGame()
+	let haversack = Engine.combat.CC_AP_HAVERSACK_RUSE
+
+	game.events.allenby = game.turn
+	game.hand_ap = [haversack]
+
+	expect(Engine.game_utils.has_trench(game, ctesiphon)).toBe(1)
+	expect(Engine.combat.check_can_flank(game)).toBe(false)
+
+	let view = rules.view(game, AP_ROLE)
+	expect(view.actions.play_cc || []).toContain(haversack)
+
+	rules.action(game, AP_ROLE, "play_cc", haversack)
+	rules.action(game, AP_ROLE, "confirm")
+
+	expect(game.combat_cards.attacker).toContain(haversack)
+	expect(Engine.combat.check_can_flank(game)).toBe(true)
+	expect(game.state).toBe("choose_flank_attack")
+})
+
 test("cavalry camel armored DRM log names armored defenders", () => {
 	let tuDiv8 = findPieceByName("TU DIV #8")
 	let brDunsterforce = findPieceByName("BR Dunsterforce")
@@ -885,6 +906,20 @@ test("Massed Cavalry Charge does not remove non-desert terrain retreat cancellat
 
 	expect(game.state).toBe("retreat_cancel")
 	expect(game.battle_result.retreat_can_cancel).toBe(true)
+})
+
+test("Haversack Ruse prevents a defender-owned trench from cancelling retreat", () => {
+	let { game } = createRetreatCancelGame({
+		targetName: "Ctesiphon",
+		originName: "Baghdad",
+		attackerCard: Engine.combat.CC_AP_HAVERSACK_RUSE,
+		withTrench: true
+	})
+
+	Engine.combat.end_battle_sequence(game, () => {})
+
+	expect(game.state).toBe("retreat")
+	expect(game.battle_result.retreat_can_cancel).toBe(false)
 })
 
 test("retreat cancellation waits for defender confirmation and can be cancelled", () => {
