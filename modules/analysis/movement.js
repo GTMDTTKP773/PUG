@@ -316,10 +316,10 @@ module.exports = function create_movement_analysis(Engine) {
 		})
 	}
 
-	function analyze_step(game, action, role, view, apply_action, get_view, index) {
+	function analyze_step(game, action, role, view, apply_action, get_view, index, before = null) {
 		let state_before = game.state || ""
 		let active_before = short_faction(game.active)
-		let before = movement_snapshot(game, role, view)
+		before = before || movement_snapshot(game, role, view)
 		let selected_before = before ? before.selected_pieces.slice() : []
 		let positions_before = new Map(selected_before.map((piece) => [piece, game.pieces[piece]]))
 		let kind = movement_action_kind(state_before, action)
@@ -357,6 +357,7 @@ module.exports = function create_movement_analysis(Engine) {
 		return {
 			game,
 			view: after_view,
+			movement: after,
 			record: {
 				index,
 				action,
@@ -389,7 +390,7 @@ module.exports = function create_movement_analysis(Engine) {
 		}
 	}
 
-	function analyze_candidate(source, role, normalized, apply_action, get_view) {
+	function analyze_candidate(source, role, normalized, apply_action, get_view, source_movement = null) {
 		let result = {
 			index: normalized.index,
 			kind: normalized.kind,
@@ -408,6 +409,7 @@ module.exports = function create_movement_analysis(Engine) {
 
 		let game = clone_game(source)
 		let acting_role = short_faction(role || game.active)
+		let current_movement = source_movement
 		result.movement_relevant = MOVEMENT_STATES.has(game.state) || !!game.move
 		for (let index = 0; index < normalized.sequence.length; index++) {
 			let action = normalized.sequence[index]
@@ -421,12 +423,22 @@ module.exports = function create_movement_analysis(Engine) {
 					state: game.state || "",
 					active: acting_role
 				}
-				result.final = compact_movement_snapshot(movement_snapshot(game, acting_role, view))
+				result.final = compact_movement_snapshot(current_movement || movement_snapshot(game, acting_role, view))
 				return result
 			}
 			try {
-				let step = analyze_step(game, action, acting_role, view, apply_action, get_view, index)
+				let step = analyze_step(
+					game,
+					action,
+					acting_role,
+					view,
+					apply_action,
+					get_view,
+					index,
+					current_movement
+				)
 				game = step.game
+				current_movement = step.movement
 				result.steps.push(step.record)
 				if (
 					MOVEMENT_STATES.has(step.record.state_before) ||
@@ -448,9 +460,11 @@ module.exports = function create_movement_analysis(Engine) {
 		}
 
 		let final_role = short_faction(game.active || acting_role)
-		let final_view = get_view(game, final_role)
 		result.valid = true
-		result.final = compact_movement_snapshot(movement_snapshot(game, final_role, final_view))
+		let final_movement = current_movement
+		if (final_role !== acting_role || !final_movement)
+			final_movement = movement_snapshot(game, final_role, get_view(game, final_role))
+		result.final = compact_movement_snapshot(final_movement)
 		result.final_state = game.state || ""
 		result.final_active = final_role
 		result.total_step_cost = result.steps.reduce((sum, step) => sum + step.actual_step_cost, 0)
@@ -484,19 +498,20 @@ module.exports = function create_movement_analysis(Engine) {
 		let acting_role = short_faction(role || game.active)
 		let source = clone_game(game)
 		let source_view = get_view(source, acting_role)
+		let source_movement = movement_snapshot(source, acting_role, source_view)
 		let requested = candidates === null
 			? flatten_legal_actions(source_view).map((action) => action)
 			: candidates
 		let normalized = (requested || []).map(normalize_candidate)
 		let records = normalized.map((candidate) =>
-			analyze_candidate(source, acting_role, candidate, apply_action, get_view)
+			analyze_candidate(source, acting_role, candidate, apply_action, get_view, source_movement)
 		)
 		return {
 			schema: "pug-ai.movement_analysis.v1",
 			state: source.state || "",
 			active: short_faction(source.active),
 			role: acting_role,
-			movement: movement_snapshot(source, acting_role, source_view),
+			movement: source_movement,
 			candidate_count: records.length,
 			valid_count: records.filter((record) => record.valid).length,
 			candidates: records
