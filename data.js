@@ -23509,6 +23509,7 @@ var data = {
 		"rlf": 1,
 		"rmf": 0,
 		"type": "tribe",
+		"badge": "cavalry",
 		"piece_class": "SCU",
 		"image_full": "TBakh.png",
 		"image_reduced": "TBakhR.png"
@@ -23557,6 +23558,7 @@ var data = {
 		"rlf": 1,
 		"rmf": 4,
 		"type": "tribe",
+		"badge": "cavalry",
 		"piece_class": "SCU",
 		"image_full": "TKurds.png",
 		"image_reduced": "TKurdsR.png"
@@ -23573,6 +23575,7 @@ var data = {
 		"rlf": 1,
 		"rmf": 4,
 		"type": "tribe",
+		"badge": "cavalry",
 		"piece_class": "SCU",
 		"image_full": "TKurds.png",
 		"image_reduced": "TKurdsR.png"

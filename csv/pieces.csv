@@ -213,11 +213,11 @@ id,faction,nation,name,cf,lf,mf,rcf,rlf,rmf,symbol,region_limit,type,badge,piece
 213,cp,Re,Indian Mutiny #1,3,2,0,2,1,0,,,irregular,,SCU,INMutiny.png,INMutinyR.png
 214,cp,Re,Indian Mutiny #2,3,2,0,2,1,0,,,irregular,,SCU,INMutiny.png,INMutinyR.png
 215,cp,Re,Indian Mutiny #3,3,2,0,2,1,0,,,irregular,,SCU,INMutiny.png,INMutinyR.png
-216,cp,tr,Bakhtiari,1,1,0,0,1,0,,,tribe,,SCU,TBakh.png,TBakhR.png
+216,cp,tr,Bakhtiari,1,1,0,0,1,0,,,tribe,cavalry,SCU,TBakh.png,TBakhR.png
 217,cp,tr,Bawi,1,1,0,0,1,0,,,tribe,,SCU,TBawi.png,TBawiR.png
 218,cp,tr,Jangali,2,2,1,1,2,1,,,tribe,,SCU,TJang.png,TJangR.png
-219,cp,tr,Kurds #1,1,1,4,0,1,4,,,tribe,,SCU,TKurds.png,TKurdsR.png
-220,cp,tr,Kurds #2,1,1,4,0,1,4,,,tribe,,SCU,TKurds.png,TKurdsR.png
+219,cp,tr,Kurds #1,1,1,4,0,1,4,,,tribe,cavalry,SCU,TKurds.png,TKurdsR.png
+220,cp,tr,Kurds #2,1,1,4,0,1,4,,,tribe,cavalry,SCU,TKurds.png,TKurdsR.png
 221,cp,tr,Laz,2,2,1,1,2,1,,,tribe,,SCU,TLaz.png,TLazR.png
 222,cp,tr,Marsh #1,1,1,1,0,1,1,,,tribe,,SCU,TMarsh.png,TMarshR.png
 223,cp,tr,Marsh #2,1,1,1,0,1,1,,,tribe,,SCU,TMarsh.png,TMarshR.png

@@ -422,6 +422,23 @@ test("cavalry camel armored DRM log names the first matching unit badge", () => 
 	expect(logs.join("\n")).not.toContain("骑兵/骆驼兵/装甲旅")
 })
 
+test("Bakhtiari and Kurds tribes count as cavalry units for special DRM", () => {
+	let ruDiv3 = findPieceByName("RU DIV #3")
+	let tribeNames = ["Bakhtiari", "Kurds #1", "Kurds #2"]
+
+	for (let name of tribeNames) {
+		let tribe = findPieceByName(name)
+		let logs = []
+		let game = createSpecialUnitDrmGame(rules.CP, [tribe], [ruDiv3])
+
+		Engine.combat.resolve_battle_sequence(game, { log: (msg) => logs.push(msg) })
+
+		expect(Engine.game_utils.get_piece_badge(tribe)).toBe("cavalry")
+		expect(logs).toContain("  骑兵: 进攻方 +1 DRM")
+		expect(game.battle_result.att_drm).toBe(1)
+	}
+})
+
 test("Massed Cavalry Charge is playable before flank declaration and can unlock flank past trenches", () => {
 	let { game, ctesiphon } = createMassedCavalryPreFlankGame()
 	let mcc = Engine.combat.CC_AP_MASSED_CAVALRY_CHARGE
