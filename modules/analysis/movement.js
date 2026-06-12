@@ -390,6 +390,20 @@ module.exports = function create_movement_analysis(Engine) {
 		}
 	}
 
+	function sequence_key(sequence, length = sequence.length) {
+		return JSON.stringify(sequence.slice(0, length))
+	}
+
+	function base_prefix_entry(source, acting_role, source_movement) {
+		return {
+			game: source,
+			acting_role,
+			movement: source_movement,
+			steps: [],
+			movement_relevant: MOVEMENT_STATES.has(source.state) || !!source.move
+		}
+	}
+
 	function analyze_candidate(source, role, normalized, apply_action, get_view, source_movement = null) {
 		let result = {
 			index: normalized.index,
@@ -407,12 +421,30 @@ module.exports = function create_movement_analysis(Engine) {
 			return result
 		}
 
-		let game = clone_game(source)
-		let acting_role = short_faction(role || game.active)
-		let current_movement = source_movement
-		result.movement_relevant = MOVEMENT_STATES.has(game.state) || !!game.move
-		for (let index = 0; index < normalized.sequence.length; index++) {
+		let prefix_entry = base_prefix_entry(source, short_faction(role || source.active), source_movement)
+		let prefix_length = 0
+		let prefix_cache = normalized.prefix_cache
+		if (prefix_cache) {
+			let cached_base = prefix_cache.get(sequence_key([]))
+			if (!cached_base) prefix_cache.set(sequence_key([]), prefix_entry)
+			for (let length = normalized.sequence.length; length > 0; length--) {
+				let cached = prefix_cache.get(sequence_key(normalized.sequence, length))
+				if (cached) {
+					prefix_entry = cached
+					prefix_length = length
+					break
+				}
+			}
+		}
+
+		let game = prefix_entry.game
+		let acting_role = prefix_entry.acting_role
+		let current_movement = prefix_entry.movement
+		result.steps = prefix_entry.steps.slice()
+		result.movement_relevant = prefix_entry.movement_relevant
+		for (let index = prefix_length; index < normalized.sequence.length; index++) {
 			let action = normalized.sequence[index]
+			game = clone_game(game)
 			acting_role = short_faction(game.active || acting_role)
 			let view = get_view(game, acting_role)
 			if (!is_legal_action(view, action)) {
@@ -448,6 +480,15 @@ module.exports = function create_movement_analysis(Engine) {
 				) {
 					result.movement_relevant = true
 				}
+				if (prefix_cache) {
+					prefix_cache.set(sequence_key(normalized.sequence, index + 1), {
+						game,
+						acting_role,
+						movement: current_movement,
+						steps: result.steps.slice(),
+						movement_relevant: result.movement_relevant
+					})
+				}
 			} catch (error) {
 				result.error = {
 					type: "action_error",
@@ -474,9 +515,10 @@ module.exports = function create_movement_analysis(Engine) {
 			let protected_faction = result.finalized_pieces.length > 0
 				? Engine.game_utils.get_piece_effective_faction(game, result.finalized_pieces[0]) || acting_role
 				: acting_role
+			let probe_game = clone_game(game)
 			let threat = result.finalized_pieces.length > 0
 				? find_standard_one_step_supply_cut_reply(
-					game,
+					probe_game,
 					result.finalized_pieces,
 					protected_faction,
 					metrics
@@ -503,8 +545,16 @@ module.exports = function create_movement_analysis(Engine) {
 			? flatten_legal_actions(source_view).map((action) => action)
 			: candidates
 		let normalized = (requested || []).map(normalize_candidate)
+		let prefix_cache = new Map()
 		let records = normalized.map((candidate) =>
-			analyze_candidate(source, acting_role, candidate, apply_action, get_view, source_movement)
+			analyze_candidate(
+				source,
+				acting_role,
+				Object.assign({ prefix_cache }, candidate),
+				apply_action,
+				get_view,
+				source_movement
+			)
 		)
 		return {
 			schema: "pug-ai.movement_analysis.v1",

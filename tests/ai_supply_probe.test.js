@@ -271,6 +271,52 @@ test("rules AI movement analysis reports dropped and continuing units", () => {
 	expect(JSON.stringify(game)).toBe(before)
 })
 
+test("rules AI movement analysis handles candidates with shared path prefixes", () => {
+	let fixture = createCaucasusActionFixture()
+	let { game, tiflis, akstafa, ru } = fixture
+	game.state = "choose_pieces_to_move"
+	game.activated = { move: [tiflis], attack: [] }
+	game.where = tiflis
+	game.move = {
+		initial: tiflis,
+		current: tiflis,
+		spaces_moved: 0,
+		pieces: [ru],
+		touched_spaces: [tiflis],
+		faction: AP
+	}
+
+	let before = JSON.stringify(game)
+	let result = rules.analysis.movement_analysis(game, AP, [
+		{
+			kind: "movement_path",
+			label: `move:${tiflis}->${akstafa}:stop`,
+			sequence: [["space", akstafa], ["stop", null]]
+		},
+		{
+			kind: "movement_path",
+			label: `move:${tiflis}->${akstafa}->${tiflis}:stop`,
+			sequence: [["space", akstafa], ["space", tiflis], ["stop", null]]
+		}
+	])
+
+	expect(result.candidate_count).toBe(2)
+	expect(result.valid_count).toBe(2)
+	expect(result.candidates[0].steps[0]).toMatchObject({
+		action: ["space", akstafa],
+		destination: akstafa
+	})
+	expect(result.candidates[1].steps[0]).toMatchObject({
+		action: ["space", akstafa],
+		destination: akstafa
+	})
+	expect(result.candidates[1].steps[1]).toMatchObject({
+		action: ["space", tiflis],
+		destination: tiflis
+	})
+	expect(JSON.stringify(game)).toBe(before)
+})
+
 test("rules AI SR analysis exposes authoritative reserve semantics without mutating source", () => {
 	let game = setupGame(2026061102, "Historical", { no_supply_warnings: true })
 	game.active = AP
