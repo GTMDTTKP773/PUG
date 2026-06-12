@@ -2,6 +2,9 @@
 
 let game, view, res
 let _assert_push_undo = 0
+let _suppress_undo_snapshot = 0
+let _analysis_movement_timing_metrics = null
+let _analysis_movement_fast_action = 0
 
 const zlib = require("zlib")
 const Engine = require("./modules/engine.js")
@@ -691,6 +694,17 @@ function set_state_globals() {
 	action_states.set_globals(game)
 }
 
+function movement_timing_start() {
+	return _analysis_movement_timing_metrics ? process.hrtime.bigint() : null
+}
+
+function movement_timing_add(name, started) {
+	if (!_analysis_movement_timing_metrics || started === null) return
+	_analysis_movement_timing_metrics[name] =
+		(_analysis_movement_timing_metrics[name] || 0) +
+		Number(process.hrtime.bigint() - started) / 1e6
+}
+
 function normalize_action_arg(arg) {
 	if (typeof arg === "string" && /^-?\d+$/.test(arg)) {
 		return Number(arg)
@@ -709,7 +723,9 @@ function normalize_action_arg(arg) {
 exports.action = function (state, current, action, arg) {
 	_assert_push_undo = 0
 	game = normalize_game(state)
+	let supply_started = movement_timing_start()
 	update_supply_if_missing()
+	movement_timing_add("movement_internal_action_supply_ms", supply_started)
 	arg = normalize_action_arg(arg)
 	try {
 		const seed_before = game.seed
@@ -721,11 +737,16 @@ exports.action = function (state, current, action, arg) {
 			}
 		}
 
+		let normalize_started = movement_timing_start()
 		set_state_globals()
-		normalize_transient_state()
+		if (_analysis_movement_fast_action === 0) normalize_transient_state()
+		movement_timing_add("movement_internal_action_normalize_before_ms", normalize_started)
 		const active_before_action = short_faction(game.active)
+		let signature_started = movement_timing_start()
 		const supply_dependency_before = get_supply_dependency_signature()
+		movement_timing_add("movement_internal_action_signature_before_ms", signature_started)
 		const state_handlers = states[game.state]
+		let handler_started = movement_timing_start()
 		if (state_handlers && action in state_handlers) {
 			state_handlers[action](arg, current)
 		} else {
@@ -739,7 +760,17 @@ exports.action = function (state, current, action, arg) {
 			else if (is_player_role(current)) return game
 			else throw new Error("Invalid action: " + action)
 		}
+		movement_timing_add("movement_internal_action_handler_ms", handler_started)
+		if (_analysis_movement_fast_action > 0) {
+			signature_started = movement_timing_start()
+			set_supply_dirty_if_needed(supply_dependency_before)
+			movement_timing_add("movement_internal_action_signature_after_ms", signature_started)
+			game.cache_revision = (Number(game.cache_revision) || 0) + 1
+			return game
+		}
+		normalize_started = movement_timing_start()
 		normalize_transient_state()
+		movement_timing_add("movement_internal_action_normalize_after_ms", normalize_started)
 		const active_after_action = short_faction(game.active)
 		if (
 			(active_before_action === AP || active_before_action === CP) &&
@@ -750,7 +781,9 @@ exports.action = function (state, current, action, arg) {
 		}
 		if (game.seed !== seed_before) clear_undo()
 		// Only map/supply-relevant state changes need a fresh global supply pass.
+		signature_started = movement_timing_start()
 		set_supply_dirty_if_needed(supply_dependency_before)
+		movement_timing_add("movement_internal_action_signature_after_ms", signature_started)
 		game.cache_revision = (Number(game.cache_revision) || 0) + 1
 		return game
 	} finally {
@@ -837,25 +870,100 @@ function analysis_activation_analysis(state, current, actions) {
 	)
 }
 
-function analysis_sr_analysis(state, current, packages) {
+function analysis_sr_analysis(state, current, packages, options) {
 	let candidate = JSON.parse(JSON.stringify(state))
 	game = normalize_game(candidate)
 	update_supply_if_missing()
 	let role = short_faction(current) || short_faction(game.active)
-	return Engine.analysis.sr_analysis(game, role, packages || [])
+	return Engine.analysis.sr_analysis(game, role, packages || [], options)
 }
 
-function analysis_movement_analysis(state, current, candidates) {
-	let candidate = JSON.parse(JSON.stringify(state))
-	game = normalize_game(candidate)
+function analysis_movement_view(state, current, skip_normalize = false) {
+	game = normalize_game(state)
+	let started = movement_timing_start()
 	update_supply_if_missing()
+	movement_timing_add("movement_internal_view_supply_ms", started)
+	started = movement_timing_start()
+	set_state_globals()
+	if (!skip_normalize) normalize_transient_state()
+	movement_timing_add("movement_internal_view_normalize_ms", started)
+	/** @type {any} */
+	let result = null
+	started = movement_timing_start()
+	with_space_index_cache(() => {
+		for (let i = 0; i < 5; i++) {
+			let state_before_prompt = game.state
+			let active_before_prompt = game.active
+			result = Engine.create_result(game)
+			if (skip_normalize) {
+				result.log = function () {
+					return this
+				}
+			}
+			let handler = states[game.state]
+			if (!handler || typeof handler.prompt !== "function") break
+			handler.prompt(result)
+			if (game.state === state_before_prompt && game.active === active_before_prompt) break
+		}
+	})
+	movement_timing_add("movement_internal_view_prompt_ms", started)
+	let view = {
+		state: game.state || "",
+		active: short_faction(game.active || current),
+		actions: null
+	}
+	if (result) result.apply(view)
+	return view
+}
+
+function analysis_movement_action(state, current, action, arg, timing_metrics = null, fast = false) {
+	_suppress_undo_snapshot += 1
+	if (fast) _analysis_movement_fast_action += 1
+	let previous_metrics = _analysis_movement_timing_metrics
+	_analysis_movement_timing_metrics = timing_metrics
+	try {
+		return exports.action(state, current, action, arg)
+	} finally {
+		_analysis_movement_timing_metrics = previous_metrics
+		if (fast) _analysis_movement_fast_action -= 1
+		_suppress_undo_snapshot -= 1
+	}
+}
+
+function analysis_movement_analysis(state, current, candidates, options) {
+	let prefix_cache = options?.prefix_cache instanceof Map ? options.prefix_cache : null
+	let cached_base = prefix_cache?.get(JSON.stringify([]))
+	let fast = options?.detail === "beam" && !options?.conservative_normalization
+	if (cached_base?.game) {
+		game = cached_base.game
+	} else {
+		let candidate = JSON.parse(JSON.stringify(state))
+		candidate.log = []
+		candidate.undo = []
+		candidate.rollback = []
+		delete candidate.rollback_state
+		delete candidate.rollback_proposal
+		delete candidate.rollback_confirmation
+		game = normalize_game(candidate)
+		update_supply_if_missing()
+	}
 	let role = short_faction(current) || short_faction(game.active)
 	return Engine.analysis.movement_analysis(
 		game,
 		role,
 		candidates,
-		(candidate, candidate_role, action, arg) => exports.action(candidate, candidate_role, action, arg),
-		(candidate, candidate_role) => exports.view(candidate, candidate_role)
+		(candidate, candidate_role, action, arg) =>
+			analysis_movement_action(candidate, candidate_role, action, arg, options?.timing_metrics, fast),
+		(candidate, candidate_role) => {
+			let previous_metrics = _analysis_movement_timing_metrics
+			_analysis_movement_timing_metrics = options?.timing_metrics || null
+			try {
+				return analysis_movement_view(candidate, candidate_role, fast)
+			} finally {
+				_analysis_movement_timing_metrics = previous_metrics
+			}
+		},
+		Object.assign({ source_isolated: true }, options)
 	)
 }
 
@@ -2172,6 +2280,7 @@ states.review_supply_warnings = {
 function push_undo() {
 	if (_assert_push_undo) throw new Error("duplicate undo point")
 	_assert_push_undo = 1
+	if (_suppress_undo_snapshot) return
 	let copy = copy_history_snapshot(game)
 	if (!game.undo) game.undo = []
 	game.undo.push(copy)

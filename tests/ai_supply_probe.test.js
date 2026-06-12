@@ -317,6 +317,129 @@ test("rules AI movement analysis handles candidates with shared path prefixes", 
 	expect(JSON.stringify(game)).toBe(before)
 })
 
+test("rules AI movement analysis reuses prefixes across analysis batches", () => {
+	let fixture = createCaucasusActionFixture()
+	let { game, tiflis, akstafa, ru } = fixture
+	game.state = "choose_pieces_to_move"
+	game.activated = { move: [tiflis], attack: [] }
+	game.where = tiflis
+	game.move = {
+		initial: tiflis,
+		current: tiflis,
+		spaces_moved: 0,
+		pieces: [ru],
+		touched_spaces: [tiflis],
+		faction: AP
+	}
+
+	let before = JSON.stringify(game)
+	let prefixCache = new Map()
+	let first = rules.analysis.movement_analysis(
+		game,
+		AP,
+		[[["space", akstafa]]],
+		{ prefix_cache: prefixCache }
+	)
+	let second = rules.analysis.movement_analysis(
+		game,
+		AP,
+		[[["space", akstafa], ["space", tiflis], ["stop", null]]],
+		{ prefix_cache: prefixCache }
+	)
+
+	expect(first.valid_count).toBe(1)
+	expect(second.valid_count).toBe(1)
+	expect(second.candidates[0].steps).toHaveLength(3)
+	expect(prefixCache.has(JSON.stringify([["space", akstafa]]))).toBe(true)
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI movement beam detail preserves ranking and model context fields", () => {
+	let fixture = createCaucasusActionFixture()
+	let { game, tiflis, akstafa, ru } = fixture
+	game.state = "choose_pieces_to_move"
+	game.activated = { move: [tiflis], attack: [] }
+	game.where = tiflis
+	game.move = {
+		initial: tiflis,
+		current: tiflis,
+		spaces_moved: 0,
+		pieces: [ru],
+		touched_spaces: [tiflis],
+		faction: AP
+	}
+	let candidate = {
+		kind: "movement_path",
+		sequence: [["space", akstafa], ["stop", null]]
+	}
+
+	let fullResponse = rules.analysis.movement_analysis(game, AP, [candidate])
+	let full = fullResponse.candidates[0]
+	let beamResponse = rules.analysis.movement_analysis(
+		game,
+		AP,
+		[candidate],
+		{ detail: "beam" }
+	)
+	let beam = beamResponse.candidates[0]
+
+	expect(beam).toMatchObject({
+		valid: full.valid,
+		sequence: full.sequence,
+		total_step_cost: full.total_step_cost,
+		finalized_pieces: full.finalized_pieces,
+		final_state: full.final_state,
+	})
+	expect(beam.steps.map((step) => ({
+		kind: step.kind,
+		actual_step_cost: step.actual_step_cost,
+		vp_delta: step.vp_delta,
+		jihad_delta: step.jihad_delta,
+		left_behind_pieces: step.left_behind_pieces,
+		forced_stop: step.forced_stop,
+	}))).toEqual(full.steps.map((step) => ({
+		kind: step.kind,
+		actual_step_cost: step.actual_step_cost,
+		vp_delta: step.vp_delta,
+		jihad_delta: step.jihad_delta,
+		left_behind_pieces: step.left_behind_pieces,
+		forced_stop: step.forced_stop,
+	})))
+	expect(beam.steps[0].source_space_before).toEqual(full.steps[0].source_space_before)
+	expect(beam.steps[0].destination_space_after).toEqual(full.steps[0].destination_space_after)
+	expect(beam.steps[0].piece_costs).toBeUndefined()
+	expect(beam.steps[0].movement_before).toBeUndefined()
+	expect(beamResponse.movement).toEqual(fullResponse.movement)
+})
+
+test("rules AI movement beam fast normalization matches the conservative path", () => {
+	let fixture = createCaucasusActionFixture()
+	let { game, tiflis, akstafa, ru } = fixture
+	game.state = "choose_pieces_to_move"
+	game.activated = { move: [tiflis], attack: [] }
+	game.where = tiflis
+	game.move = {
+		initial: tiflis,
+		current: tiflis,
+		spaces_moved: 0,
+		pieces: [ru],
+		touched_spaces: [tiflis],
+		faction: AP
+	}
+	let candidates = [
+		{ sequence: [["space", akstafa]] },
+		{ sequence: [["space", akstafa], ["space", tiflis], ["stop", null]] },
+	]
+
+	let fast = rules.analysis.movement_analysis(game, AP, candidates, { detail: "beam" })
+	let conservative = rules.analysis.movement_analysis(game, AP, candidates, {
+		detail: "beam",
+		conservative_normalization: true,
+	})
+
+	expect(fast).toEqual(conservative)
+})
+
 test("rules AI SR analysis exposes authoritative reserve semantics without mutating source", () => {
 	let game = setupGame(2026061102, "Historical", { no_supply_warnings: true })
 	game.active = AP
@@ -448,6 +571,37 @@ test("rules AI SR analysis compares only unpaid destination cost after the piece
 		affordable: true,
 		piece_legal: true,
 		destination_legal: true,
+	})
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI SR analysis can omit full route paths for search priors", () => {
+	let fixture = createCaucasusActionFixture()
+	let { game, tiflis, akstafa, ru } = fixture
+	game.active = AP
+	game.state = "sr_phase"
+	game.sr = 6
+	game.sr_moved = []
+
+	expect(Engine.map.get_sr_destinations(game, ru, AP)).toContain(akstafa)
+	let before = JSON.stringify(game)
+	let full = rules.analysis.sr_analysis(game, AP, [[ru, akstafa]]).packages[0]
+	let light = rules.analysis.sr_analysis(
+		game,
+		AP,
+		[[ru, akstafa]],
+		{ include_route_path: false }
+	).packages[0]
+
+	expect(full.route).toMatchObject({
+		kind: "overland",
+		overland_path: [tiflis, akstafa],
+		overland_hops: 1,
+	})
+	expect(light.route).toMatchObject({
+		kind: "overland",
+		overland_path: [],
+		overland_hops: null,
 	})
 	expect(JSON.stringify(game)).toBe(before)
 })

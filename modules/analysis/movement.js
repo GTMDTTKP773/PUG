@@ -12,9 +12,19 @@ module.exports = function create_movement_analysis(Engine) {
 	const { AP, CP } = Engine.constants
 	const { find_standard_one_step_supply_cut_reply } = require("./supply_probe.js")(Engine)
 	const MOVEMENT_STATES = new Set(["choose_pieces_to_move", "move_stack"])
+	const snapshot_source_context_cache = new WeakMap()
 
 	function clone_game(game) {
 		return JSON.parse(JSON.stringify(game))
+	}
+
+	function timing_start(metrics) {
+		return metrics ? process.hrtime.bigint() : null
+	}
+
+	function timing_add(metrics, name, started) {
+		if (!metrics || started === null) return
+		metrics[name] = (metrics[name] || 0) + Number(process.hrtime.bigint() - started) / 1e6
 	}
 
 	function short_faction(faction) {
@@ -95,6 +105,15 @@ module.exports = function create_movement_analysis(Engine) {
 		let options = (view.actions || {})[name]
 		if (Array.isArray(options)) return options.includes(arg)
 		return options === 1 && (arg === null || arg === undefined)
+	}
+
+	function is_legal_snapshot_action(snapshot, action) {
+		if (!snapshot) return false
+		let [name, arg] = action
+		if (name === "space") return (snapshot.destinations || []).includes(arg)
+		if (name === "piece") return (snapshot.piece_options || []).includes(arg)
+		if (name === "stop") return snapshot.can_stop && (arg === null || arg === undefined)
+		return false
 	}
 
 	function is_real_space(space) {
@@ -180,6 +199,26 @@ module.exports = function create_movement_analysis(Engine) {
 		}
 	}
 
+	function beam_piece_context(game, piece, cache) {
+		let info = data.pieces[piece] || {}
+		let status = supply_status(game, piece, cache)
+		return {
+			id: piece,
+			cf: Engine.game_utils.get_piece_cf ? Engine.game_utils.get_piece_cf(game, piece) : 0,
+			lf: Engine.game_utils.get_piece_lf ? Engine.game_utils.get_piece_lf(game, piece) : 0,
+			mf: Engine.map?.get_piece_mf ? Engine.map.get_piece_mf(piece) : info.mf || 0,
+			lcu: Engine.game_utils.is_lcu(piece),
+			hq: Engine.game_utils.is_hq(piece),
+			oos: status === "OOS",
+			limited_supply: Engine.map?.is_limited_supply_status
+				? Engine.map.is_limited_supply_status(status)
+				: status === "LIMITED",
+			disrupted_supply: Engine.map?.is_disrupted_supply_status
+				? Engine.map.is_disrupted_supply_status(status)
+				: status === "DISRUPTED"
+		}
+	}
+
 	function stack_counts(game, pieces, role) {
 		let result = {
 			friendly: { pieces: 0, lcu: 0, scu: 0, cf: 0, lf: 0 },
@@ -233,7 +272,7 @@ module.exports = function create_movement_analysis(Engine) {
 		}
 	}
 
-	function movement_snapshot(game, role, view) {
+	function movement_snapshot(game, role, view, detail = "full") {
 		if (!game.move) return null
 		let selected = Array.isArray(game.move.pieces) ? game.move.pieces.slice() : []
 		let current = game.move.current || game.move.initial || null
@@ -245,21 +284,26 @@ module.exports = function create_movement_analysis(Engine) {
 				: Engine.map.get_move_end_space_block_reason(game, current, role)
 		}
 		let actions = view?.actions || {}
-		return {
+		let snapshot = {
 			initial: game.move.initial || null,
 			current,
 			faction: short_faction(game.move.faction || role),
 			spaces_moved: Number(game.move.spaces_moved || 0),
 			selected_pieces: selected,
-			selected: selected.filter((piece) => data.pieces[piece]).map((piece) => piece_context(game, piece, cache)),
+			selected: selected.filter((piece) => data.pieces[piece]).map((piece) =>
+				detail === "beam" ? beam_piece_context(game, piece, cache) : piece_context(game, piece, cache)
+			),
 			touched_spaces: Array.isArray(game.move.touched_spaces) ? game.move.touched_spaces.slice() : [],
 			can_stop: actions.stop === 1,
 			destinations: Array.isArray(actions.space) ? actions.space.slice() : [],
 			piece_options: Array.isArray(actions.piece) ? actions.piece.slice() : [],
-			end_block_reason,
-			initial_space: space_context(game, game.move.initial, role),
-			current_space: space_context(game, current, role)
+			end_block_reason
 		}
+		if (detail !== "beam") {
+			snapshot.initial_space = space_context(game, game.move.initial, role)
+			snapshot.current_space = space_context(game, current, role)
+		}
+		return snapshot
 	}
 
 	function compact_movement_snapshot(snapshot) {
@@ -289,6 +333,15 @@ module.exports = function create_movement_analysis(Engine) {
 		return "other"
 	}
 
+	function source_context_for_snapshot(game, snapshot, source, role) {
+		if (!snapshot || typeof snapshot !== "object") return space_context(game, source, role)
+		let cached = snapshot_source_context_cache.get(snapshot)
+		if (cached && cached.role === role && cached.source === source) return cached.context
+		let context = space_context(game, source, role)
+		snapshot_source_context_cache.set(snapshot, { role, source, context })
+		return context
+	}
+
 	function movement_costs(game, action, role) {
 		let [name, target] = action
 		if (name !== "space" || !game.move || !is_real_space(target)) return []
@@ -316,28 +369,62 @@ module.exports = function create_movement_analysis(Engine) {
 		})
 	}
 
-	function analyze_step(game, action, role, view, apply_action, get_view, index, before = null) {
+	function beam_movement_costs(game, action, role) {
+		let [name, target] = action
+		if (name !== "space" || !game.move || !is_real_space(target)) return []
+		return (game.move.pieces || []).map((piece) => ({
+			piece,
+			total: Engine.map.get_movement_cost_breakdown(game, piece, target, role).total
+		}))
+	}
+
+	function analyze_step(
+		game,
+		action,
+		role,
+		view,
+		apply_action,
+		get_view,
+		index,
+		before = null,
+		detail = "full",
+		timing_metrics = null
+	) {
+		let prepare_started = timing_start(timing_metrics)
 		let state_before = game.state || ""
 		let active_before = short_faction(game.active)
-		before = before || movement_snapshot(game, role, view)
+		before = before || movement_snapshot(game, role, view, detail)
 		let selected_before = before ? before.selected_pieces.slice() : []
 		let positions_before = new Map(selected_before.map((piece) => [piece, game.pieces[piece]]))
 		let kind = movement_action_kind(state_before, action)
 		let source = before?.current || null
 		let destination = kind === "destination" ? action[1] : source
-		let costs = movement_costs(game, action, role)
-		let stack_legal = kind === "destination" && before
+		let costs = detail === "beam"
+			? beam_movement_costs(game, action, role)
+			: movement_costs(game, action, role)
+		let stack_legal = detail !== "beam" && kind === "destination" && before
 			? Engine.map.can_stack_move_to(game, destination, role)
 			: null
-		let source_space_before = space_context(game, source, role)
-		let destination_space_before = space_context(game, destination, role)
+		let include_space_context = detail !== "beam" || kind === "destination"
+		let source_space_before = include_space_context
+			? source_context_for_snapshot(game, before, source, role)
+			: null
+		let destination_space_before = include_space_context ? space_context(game, destination, role) : null
 		let vp_before = Number(game.vp || 0)
 		let jihad_before = Number(game.jihad || 0)
+		timing_add(timing_metrics, "movement_internal_step_prepare_ms", prepare_started)
 
+		let action_started = timing_start(timing_metrics)
 		game = apply_action(game, active_before, action[0], action[1])
+		timing_add(timing_metrics, "movement_internal_action_ms", action_started)
+		let view_started = timing_start(timing_metrics)
+		let after_view = get_view(game, short_faction(game.active))
+		timing_add(timing_metrics, "movement_internal_after_view_ms", view_started)
 		let active_after = short_faction(game.active)
-		let after_view = get_view(game, active_after)
-		let after = movement_snapshot(game, active_after, after_view)
+		let snapshot_started = timing_start(timing_metrics)
+		let after = movement_snapshot(game, active_after, after_view, detail)
+		timing_add(timing_metrics, "movement_internal_snapshot_ms", snapshot_started)
+		let finish_started = timing_start(timing_metrics)
 		let continuing = new Set(after?.selected_pieces || [])
 		let selected_after = after?.selected_pieces || []
 		let selected_before_set = new Set(selected_before)
@@ -353,6 +440,7 @@ module.exports = function create_movement_analysis(Engine) {
 			(maximum, cost) => entered_set.has(cost.piece) ? Math.max(maximum, cost.total) : maximum,
 			0
 		)
+		timing_add(timing_metrics, "movement_internal_step_finish_ms", finish_started)
 
 		return {
 			game,
@@ -369,7 +457,7 @@ module.exports = function create_movement_analysis(Engine) {
 				source,
 				destination,
 				stack_legal,
-				piece_costs: costs,
+				piece_costs: detail === "beam" ? undefined : costs,
 				actual_step_cost,
 				selected_added,
 				selected_removed,
@@ -383,9 +471,9 @@ module.exports = function create_movement_analysis(Engine) {
 				jihad_delta: Number(game.jihad || 0) - jihad_before,
 				source_space_before,
 				destination_space_before,
-				destination_space_after: space_context(game, destination, role),
-				movement_before: compact_movement_snapshot(before),
-				movement_after: compact_movement_snapshot(after)
+				destination_space_after: include_space_context ? space_context(game, destination, role) : null,
+				movement_before: detail === "beam" ? undefined : compact_movement_snapshot(before),
+				movement_after: detail === "beam" ? undefined : compact_movement_snapshot(after)
 			}
 		}
 	}
@@ -404,7 +492,16 @@ module.exports = function create_movement_analysis(Engine) {
 		}
 	}
 
-	function analyze_candidate(source, role, normalized, apply_action, get_view, source_movement = null) {
+	function analyze_candidate(
+		source,
+		role,
+		normalized,
+		apply_action,
+		get_view,
+		source_movement = null,
+		detail = "full",
+		timing_metrics = null
+	) {
 		let result = {
 			index: normalized.index,
 			kind: normalized.kind,
@@ -444,10 +541,19 @@ module.exports = function create_movement_analysis(Engine) {
 		result.movement_relevant = prefix_entry.movement_relevant
 		for (let index = prefix_length; index < normalized.sequence.length; index++) {
 			let action = normalized.sequence[index]
+			let clone_started = timing_start(timing_metrics)
 			game = clone_game(game)
+			timing_add(timing_metrics, "movement_internal_clone_ms", clone_started)
 			acting_role = short_faction(game.active || acting_role)
-			let view = get_view(game, acting_role)
-			if (!is_legal_action(view, action)) {
+			let view = null
+			let legal = detail === "beam" && is_legal_snapshot_action(current_movement, action)
+			if (!legal) {
+				let legal_view_started = timing_start(timing_metrics)
+				view = get_view(game, acting_role)
+				timing_add(timing_metrics, "movement_internal_legal_view_ms", legal_view_started)
+				legal = is_legal_action(view, action)
+			}
+			if (!legal) {
 				result.error = {
 					type: "illegal_action",
 					step: index,
@@ -455,7 +561,9 @@ module.exports = function create_movement_analysis(Engine) {
 					state: game.state || "",
 					active: acting_role
 				}
-				result.final = compact_movement_snapshot(current_movement || movement_snapshot(game, acting_role, view))
+				result.final = compact_movement_snapshot(
+					current_movement || movement_snapshot(game, acting_role, view, detail)
+				)
 				return result
 			}
 			try {
@@ -467,7 +575,9 @@ module.exports = function create_movement_analysis(Engine) {
 					apply_action,
 					get_view,
 					index,
-					current_movement
+					current_movement,
+					detail,
+					timing_metrics
 				)
 				game = step.game
 				current_movement = step.movement
@@ -504,21 +614,21 @@ module.exports = function create_movement_analysis(Engine) {
 		result.valid = true
 		let final_movement = current_movement
 		if (final_role !== acting_role || !final_movement)
-			final_movement = movement_snapshot(game, final_role, get_view(game, final_role))
+			final_movement = movement_snapshot(game, final_role, get_view(game, final_role), detail)
 		result.final = compact_movement_snapshot(final_movement)
 		result.final_state = game.state || ""
 		result.final_active = final_role
 		result.total_step_cost = result.steps.reduce((sum, step) => sum + step.actual_step_cost, 0)
 		result.finalized_pieces = Array.from(new Set(result.steps.flatMap((step) => step.finalized_pieces)))
 		if (normalized.probe_supply_cut) {
+			let probe_started = timing_start(timing_metrics)
 			let metrics = {}
 			let protected_faction = result.finalized_pieces.length > 0
 				? Engine.game_utils.get_piece_effective_faction(game, result.finalized_pieces[0]) || acting_role
 				: acting_role
-			let probe_game = clone_game(game)
 			let threat = result.finalized_pieces.length > 0
 				? find_standard_one_step_supply_cut_reply(
-					probe_game,
+					game,
 					result.finalized_pieces,
 					protected_faction,
 					metrics
@@ -530,22 +640,30 @@ module.exports = function create_movement_analysis(Engine) {
 				metrics
 			}
 			result.supply_cut_threat = threat
+			timing_add(timing_metrics, "movement_internal_supply_probe_ms", probe_started)
 		}
 		return result
 	}
 
-	function movement_analysis(game, role, candidates = null, apply_action = null, get_view = null) {
+	function movement_analysis(game, role, candidates = null, apply_action = null, get_view = null, options = null) {
 		if (typeof apply_action !== "function") throw new Error("apply_action callback is required")
 		if (typeof get_view !== "function") throw new Error("get_view callback is required")
 		let acting_role = short_faction(role || game.active)
-		let source = clone_game(game)
-		let source_view = get_view(source, acting_role)
-		let source_movement = movement_snapshot(source, acting_role, source_view)
+		let detail = options?.detail === "beam" ? "beam" : "full"
+		let timing_metrics = options?.timing_metrics || null
+		let prefix_cache = options?.prefix_cache instanceof Map ? options.prefix_cache : new Map()
+		let cached_base = prefix_cache.get(sequence_key([]))
+		let source = cached_base?.game || (options?.source_isolated ? game : clone_game(game))
+		let source_view = null
+		let source_movement = cached_base?.movement || null
+		if (!cached_base || candidates === null) {
+			source_view = get_view(source, acting_role)
+			if (!source_movement) source_movement = movement_snapshot(source, acting_role, source_view)
+		}
 		let requested = candidates === null
 			? flatten_legal_actions(source_view).map((action) => action)
 			: candidates
 		let normalized = (requested || []).map(normalize_candidate)
-		let prefix_cache = new Map()
 		let records = normalized.map((candidate) =>
 			analyze_candidate(
 				source,
@@ -553,7 +671,9 @@ module.exports = function create_movement_analysis(Engine) {
 				Object.assign({ prefix_cache }, candidate),
 				apply_action,
 				get_view,
-				source_movement
+				source_movement,
+				detail,
+				timing_metrics
 			)
 		)
 		return {

@@ -472,7 +472,7 @@ module.exports = function create_candidate_context_analysis(Engine) {
 		return result
 	}
 
-	function sr_analysis(game, role, packages = []) {
+	function sr_analysis(game, role, packages = [], options = null) {
 		let acting_role = short_faction(role || game.active)
 		let cache = create_supply_cache(game)
 		let piece_legality = new Map()
@@ -497,7 +497,7 @@ module.exports = function create_candidate_context_analysis(Engine) {
 			if (!piece_destinations.has(piece)) {
 				let destinations =
 					get_piece_legality(piece) && Engine.map?.get_sr_destinations
-						? Engine.map.get_sr_destinations(game, piece, acting_role)
+						? Engine.map.get_sr_destinations(game, piece, acting_role, cache)
 						: []
 				piece_destinations.set(piece, new Set(destinations))
 			}
@@ -556,7 +556,14 @@ module.exports = function create_candidate_context_analysis(Engine) {
 									: 0
 						}
 			let route = Engine.map?.get_sr_route_context
-				? Engine.map.get_sr_route_context(game, piece, source, destination, acting_role)
+				? Engine.map.get_sr_route_context(
+						game,
+						piece,
+						source,
+						destination,
+						acting_role,
+						{ include_overland_path: options?.include_route_path !== false }
+					)
 				: null
 			let destination_stage = game.state === "sr_move" && game.sr_piece === piece
 			let paid_cost = destination_stage ? get_paid_cost(piece, source) : 0

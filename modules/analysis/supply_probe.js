@@ -67,8 +67,25 @@ module.exports = function create_supply_probe_analysis(Engine) {
 		)
 	}
 
-	function get_oos_pieces(game, pieces, cache = null) {
-		return pieces.filter((p) => is_on_map(game, p) && get_supply_status(game, p, cache) === "OOS")
+	function get_current_supply_status(game, p, cache = null) {
+		if (
+			game.supply_dirty === false &&
+			Array.isArray(game.supply_status) &&
+			game.supply_status.length === game.pieces.length &&
+			typeof game.supply_status[p] === "string"
+		) {
+			return game.supply_status[p]
+		}
+		return get_supply_status(game, p, cache)
+	}
+
+	function get_oos_pieces(game, pieces, cache = null, use_current_supply = false) {
+		return pieces.filter(
+			(p) =>
+				is_on_map(game, p) &&
+				(use_current_supply ? get_current_supply_status(game, p, cache) : get_supply_status(game, p, cache)) ===
+					"OOS"
+		)
 	}
 
 	function can_reply_piece(game, p, faction, cache = null) {
@@ -77,7 +94,7 @@ module.exports = function create_supply_probe_analysis(Engine) {
 		if (!Engine.game_utils.can_piece_be_activated(p)) return false
 		if (!Engine.game_utils.is_regular(p)) return false
 		if (Engine.map.get_piece_mf(p) <= 0) return false
-		return get_supply_status(game, p, cache) !== "OOS"
+		return get_current_supply_status(game, p, cache) !== "OOS"
 	}
 
 	function can_reply_target_change_supply(game, target, faction) {
@@ -165,7 +182,7 @@ module.exports = function create_supply_probe_analysis(Engine) {
 	function find_standard_one_step_supply_cut_reply(game, protected_pieces, protected_faction, metrics = null) {
 		add_metric(metrics, "reply_scans")
 		let candidate_cache = create_supply_cache(game)
-		let baseline_oos = get_oos_pieces(game, protected_pieces, candidate_cache)
+		let baseline_oos = get_oos_pieces(game, protected_pieces, candidate_cache, true)
 		if (baseline_oos.length > 0) {
 			return { reason: "candidate_oos", oos_pieces: baseline_oos }
 		}

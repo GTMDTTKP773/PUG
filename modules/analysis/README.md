@@ -76,6 +76,9 @@ facts, final movement state, and an isolated error for each invalid candidate. C
 `sequence`, `kind`, and `label`; plain `[action, arg]` pairs are also accepted.
 Set `probe_supply_cut` on a final path candidate to test its finalized units
 against the standard one-step regular-unit reply probe.
+Internal bridge callers may pass an optional fourth argument containing a
+`prefix_cache` Map to reuse already validated Movement prefixes across
+multiple read-only batches for the same source state.
 
 `rules.analysis.public_position(game)` clones and normalizes the source state,
 refreshes supply on that clone when needed, and returns public per-space facts:

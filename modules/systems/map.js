@@ -2886,16 +2886,41 @@ module.exports = function (Engine) {
 			return false
 		}
 		if (!is_sr_end_space_allowed(game, p, s, faction)) return false
-		let status = get_supply_status(game, s, faction, p, true)
+		let cache = options.supply_cache || null
+		let status = get_supply_status(
+			game,
+			s,
+			faction,
+			p,
+			true,
+			cache ? cache.supply_trace_cache : null,
+			cache ? cache.supply_context : null,
+			cache ? cache.source_cache : null,
+			cache ? cache.status_cache : null
+		)
 		if (!is_supply_status_in_supply(status)) return false
 		if (!can_enter_area(game, p, s)) return false
 		if (!can_stack_end_in_space(game, s, [p], ignore_hq_heavy_artillery_support(options))) return false
 		if (data.spaces[s].terrain === DESERT) {
-			if (!can_trace_reserve_sr_desert_supply(game, p, s)) return false
+			if (!can_trace_reserve_sr_desert_supply(
+				game,
+				p,
+				s,
+				cache ? cache.supply_context : null,
+				cache ? cache.source_cache : null
+			)) return false
 		}
 		if (is_reserve_sr_supply_source_destination(game, p, s, faction)) return true
 		if (is_reserve_sr_port_destination(game, p, s, faction)) return true
-		return has_same_nationality_supplied_unit_in_space(game, p, s)
+		return has_same_nationality_supplied_unit_in_space(
+			game,
+			p,
+			s,
+			cache ? cache.supply_trace_cache : null,
+			cache ? cache.supply_context : null,
+			cache ? cache.source_cache : null,
+			cache ? cache.status_cache : null
+		)
 	}
 
 	function get_faction_reserve_space_id(faction) {
@@ -3053,8 +3078,9 @@ module.exports = function (Engine) {
 		return !is_sr_destination_blocked_by_events(game, source, dest, faction)
 	}
 
-	function get_sr_route_context(game, p, source = null, dest = null, faction = null) {
+	function get_sr_route_context(game, p, source = null, dest = null, faction = null, options = {}) {
 		if (!(p >= 0) || !data.pieces[p]) return null
+		options = options || {}
 		if (source === null || source === undefined) source = game.pieces[p]
 		if (faction === null || faction === undefined) {
 			faction = get_piece_effective_faction(game, p)
@@ -3076,7 +3102,9 @@ module.exports = function (Engine) {
 			!destination_reserve &&
 			is_sr_sea_departure_move(game, source, dest)
 		let rail_only = data.pieces[p].piece_class === "LCU"
+		let include_overland_path = options.include_overland_path !== false
 		let overland_path =
+			include_overland_path &&
 			!source_reserve && !destination_reserve && data.spaces[source] && data.spaces[dest]
 				? find_sr_path(game, p, source, dest, faction, rail_only)
 				: null
@@ -3154,7 +3182,7 @@ module.exports = function (Engine) {
 		return can_stack_end_in_space(game, dest, [p], IGNORE_HQ_HEAVY_ARTILLERY_SUPPORT)
 	}
 
-	function get_sr_destinations(game, p, faction) {
+	function get_sr_destinations(game, p, faction, cache = null) {
 		let source = game.pieces[p]
 		if (source !== RESERVE && (source <= 0 || !data.spaces[source])) return []
 		if (set_has(game.sr_moved || [], p)) return []
@@ -3164,10 +3192,10 @@ module.exports = function (Engine) {
 
 		let source_reserve = is_reserve_space(source)
 		let destinations = new Set()
-		let supply_trace_cache = new Map()
-		let source_cache = new Map()
-		let status_cache = new Map()
-		let supply_context = create_supply_context(game)
+		let supply_trace_cache = cache?.supply_trace_cache || new Map()
+		let source_cache = cache?.source_cache || new Map()
+		let status_cache = cache?.status_cache || new Map()
+		let supply_context = cache?.supply_context || create_supply_context(game)
 
 		if (source_reserve) {
 			if (info.piece_class === "LCU") return []
@@ -3200,7 +3228,7 @@ module.exports = function (Engine) {
 			let filtered = []
 			for (let s of candidates) {
 				if (is_reserve_space(s)) continue
-				if (!can_sr_from_reserve_to_space(game, p, s, faction)) continue
+				if (!can_sr_from_reserve_to_space(game, p, s, faction, { supply_cache: cache })) continue
 				filtered.push(s)
 			}
 			return filtered
