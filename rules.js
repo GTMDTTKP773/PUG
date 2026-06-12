@@ -837,6 +837,41 @@ function analysis_activation_analysis(state, current, actions) {
 	)
 }
 
+function analysis_sr_analysis(state, current, packages) {
+	let candidate = JSON.parse(JSON.stringify(state))
+	game = normalize_game(candidate)
+	update_supply_if_missing()
+	let role = short_faction(current) || short_faction(game.active)
+	return Engine.analysis.sr_analysis(game, role, packages || [])
+}
+
+function analysis_movement_analysis(state, current, candidates) {
+	let candidate = JSON.parse(JSON.stringify(state))
+	game = normalize_game(candidate)
+	update_supply_if_missing()
+	let role = short_faction(current) || short_faction(game.active)
+	return Engine.analysis.movement_analysis(
+		game,
+		role,
+		candidates,
+		(candidate, candidate_role, action, arg) => exports.action(candidate, candidate_role, action, arg),
+		(candidate, candidate_role) => exports.view(candidate, candidate_role)
+	)
+}
+
+function analysis_jihad_analysis(state, current) {
+	let candidate = JSON.parse(JSON.stringify(state))
+	game = normalize_game(candidate)
+	update_supply_if_missing()
+	let role = short_faction(current) || short_faction(game.active)
+	return Engine.analysis.jihad_analysis(
+		game,
+		role,
+		(candidate, candidate_role, action, arg) => exports.action(candidate, candidate_role, action, arg),
+		(candidate, candidate_role) => exports.view(candidate, candidate_role)
+	)
+}
+
 function analysis_combat_preview(state, current, actions) {
 	let candidate = JSON.parse(JSON.stringify(state))
 	game = normalize_game(candidate)
@@ -851,16 +886,34 @@ function analysis_combat_preview(state, current, actions) {
 	)
 }
 
+function analysis_combat_package_analysis(state, current, candidates) {
+	let candidate = JSON.parse(JSON.stringify(state))
+	game = normalize_game(candidate)
+	update_supply_if_missing()
+	let role = short_faction(current) || short_faction(game.active)
+	return Engine.analysis.combat_package_analysis(
+		game,
+		role,
+		candidates,
+		(candidate, candidate_role, action, arg) => exports.action(candidate, candidate_role, action, arg),
+		(candidate, candidate_role) => exports.view(candidate, candidate_role)
+	)
+}
+
 exports.analysis = Object.freeze({
 	version: Engine.analysis.version,
 	capabilities: Engine.analysis.capabilities,
 	activation_analysis: analysis_activation_analysis,
 	candidate_context: analysis_candidate_context,
 	combat_preview: analysis_combat_preview,
+	combat_package_analysis: analysis_combat_package_analysis,
 	decision_snapshot: analysis_decision_snapshot,
+	jihad_analysis: analysis_jihad_analysis,
+	movement_analysis: analysis_movement_analysis,
 	public_position: analysis_public_position,
 	probe_supply_cut_actions: analyze_supply_cut_actions,
 	simulate_action_sequence,
+	sr_analysis: analysis_sr_analysis,
 	step_decision
 })
 

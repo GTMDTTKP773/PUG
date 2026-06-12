@@ -8,22 +8,29 @@
  */
 module.exports = function create_analysis(Engine) {
 	return Object.freeze({
-		version: 6,
+		version: 10,
 		capabilities: Object.freeze([
 			"action_sequence.simulate",
 			"activation_analysis.v1",
 			"candidate_context.v1",
 			"combat_preview.v1",
+			"combat_package_analysis.v1",
 			"decision.snapshot",
 			"decision.step",
+			"jihad_analysis.v1",
+			"movement_analysis.v1",
 			"position.public",
 			"position.public.v2",
+			"sr_analysis.v1",
 			"supply_cut.standard_one_step_regular"
 		]),
 		...require("./action_sequence.js")(),
 		...require("./candidate_context.js")(Engine),
 		...require("./combat_preview.js")(Engine),
+		...require("./combat_package.js")(Engine),
 		...require("./decision.js")(),
+		...require("./jihad.js")(Engine),
+		...require("./movement.js")(Engine),
 		...require("./position.js")(Engine),
 		...require("./supply_probe.js")(Engine)
 	})

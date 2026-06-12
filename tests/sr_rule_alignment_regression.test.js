@@ -38,9 +38,24 @@ test("Suez Canal control blocks direct AP sea SR between East Med and Persian Gu
 	expect(Engine.map.can_suez_delayed_sr_to_space(game, brDiv, findSpace("Haifa"), findSpace("Abadan"), AP)).toBe(true)
 
 	game.active = AP
+	game.state = "sr_phase"
+	game.sr_moved = []
+	game.sr = 3
+	let analysis = rules.analysis.sr_analysis(game, AP, [[brDiv, findSpace("Abadan")]])
+	expect(analysis.packages[0]).toMatchObject({
+		piece_legal: true,
+		destination_legal: true,
+		route: {
+			kind: "suez_delayed",
+			sea_sr: true,
+			delayed_suez: true,
+			arrival_zone: "persian_gulf",
+			arrival_turn: game.turn + 1,
+		},
+	})
+
 	game.state = "sr_move"
 	game.sr_piece = brDiv
-	game.sr = 3
 	game = rules.action(game, AP_ROLE, "space", findSpace("Abadan"))
 
 	expect(game.pieces[brDiv]).toBe(Engine.constants.REINFORCEMENTS)
@@ -106,13 +121,52 @@ test("AP sea SR away from the last Ottoman port supply unit still adds Jihad", (
 	expect(Engine.map.can_sr_to_space(game, brDiv, findSpace("Port Said"), AP)).toBe(true)
 
 	game.active = AP
+	game.state = "sr_phase"
+	game.sr_moved = []
+	game.sr = 3
+	let analysis = rules.analysis.sr_analysis(game, AP, [[brDiv, findSpace("Port Said")]])
+	expect(analysis.packages[0]).toMatchObject({
+		route: {
+			kind: "sea",
+			sea_sr: true,
+			delayed_suez: false,
+		},
+		departure: {
+			ottoman_port: true,
+			sole_supply_piece_ids: [brDiv],
+			sole_supply_piece_count: 1,
+			jihad_increase: 1,
+		},
+	})
+
 	game.state = "sr_move"
 	game.sr_piece = brDiv
-	game.sr = 3
 	game = rules.action(game, AP_ROLE, "space", findSpace("Port Said"))
 
 	expect(game.pieces[brDiv]).toBe(findSpace("Port Said"))
 	expect(game.jihad).toBe(1)
+})
+
+test("SR route analysis uses the same port-to-port departure classification as execution", () => {
+	let game = setupGame(2026061101, "Historical", { no_supply_warnings: true })
+	clearBoard(game)
+
+	let brDiv = place(game, AP, "BR DIV #1", "Haifa")
+	let source = findSpace("Haifa")
+	let destination = findSpace("Port Said")
+	for (let name of ["Haifa", "Port Said"]) control(game, name, AP)
+
+	let route = Engine.map.get_sr_route_context(game, brDiv, source, destination, AP)
+	expect(route.sea_sr).toBe(Engine.map.is_sr_sea_departure_move(game, source, destination))
+	expect(route.sea_sr).toBe(true)
+	expect(Engine.map.is_sr_sea_departure_move(game, source, source)).toBe(false)
+	expect(
+		Engine.map.is_sr_sea_departure_move(
+			game,
+			Engine.game_utils.get_scu_reserve_box(AP),
+			destination
+		)
+	).toBe(false)
 })
 
 test("AP Black Sea sea SR to outside ports requires the opened straits, while special RU units can reserve SR to Aegean", () => {

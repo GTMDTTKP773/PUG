@@ -16,10 +16,14 @@ action_sequence.simulate
 activation_analysis.v1
 candidate_context.v1
 combat_preview.v1
+combat_package_analysis.v1
 decision.snapshot
 decision.step
+jihad_analysis.v1
+movement_analysis.v1
 position.public
 position.public.v2
+sr_analysis.v1
 supply_cut.standard_one_step_regular
 ```
 
@@ -47,9 +51,31 @@ facts for candidate actions: selected attackers, legal target previews, odds,
 defender stacks, retreat options, and current loss/advance/retreat state when a
 battle is already underway.
 
+`rules.analysis.combat_package_analysis(game, role, candidates)` validates
+deterministic attack declaration, loss assignment, retreat, and advance
+sequences on cloned states. Records include legal actions after each prefix,
+participant snapshots, state deltas, completion status, and whether randomness
+was consumed.
+
 `rules.analysis.step_decision(game, role, action)` clones a game, validates an
 AI candidate action, applies it, and advances committed confirmations or
 single-candidate browser flow until the next real decision.
+
+`rules.analysis.jihad_analysis(game, role)` returns the public Jihad position:
+level versus tribes on map, tribe reserves and legal activity grids, Jihad
+city effective/scoring ownership, exact revolt targets and d6 success faces,
+and public revolt rewards. During Jihad placement/removal it also validates
+all legal piece/space packages on cloned states and reports their control and
+Jihad-level effects.
+
+`rules.analysis.movement_analysis(game, role, candidates)` validates and
+executes single-step or multi-step Movement candidates on cloned states. It
+returns authoritative per-step MP costs, unit stop/continue outcomes, source
+and destination context, control/VP/Jihad deltas, final selected-unit supply
+facts, final movement state, and an isolated error for each invalid candidate. Candidate objects may provide a
+`sequence`, `kind`, and `label`; plain `[action, arg]` pairs are also accepted.
+Set `probe_supply_cut` on a final path candidate to test its finalized units
+against the standard one-step regular-unit reply probe.
 
 `rules.analysis.public_position(game)` clones and normalizes the source state,
 refreshes supply on that clone when needed, and returns public per-space facts:
@@ -58,6 +84,17 @@ factor totals, supply degradation counts, fort siege/destruction flags, and
 beachhead flags. It also returns public on-map piece summaries with current
 faction, reduced/supply/moved flags, and current factors. It does not expose
 hands or legal actions.
+
+`rules.analysis.sr_analysis(game, role, packages)` returns authoritative
+read-only facts for batch `piece -> destination` SR packages, including rule
+cost and surcharge breakdown, legality, reserve-box source/destination flags,
+overland/sea/Suez-delayed route facts, unit context, source/destination space
+summaries, and voluntary-withdrawal Jihad risk. Repeated packages share
+per-piece legality, destination-set, unit-context, and per-location summary
+work within the batch. `cost` remains the full package cost. During `sr_move`,
+where the unit's initial cost has already been paid, `paid_cost`,
+`additional_cost`, `decision_cost`, and `cost_stage` expose the remaining
+destination decision accurately.
 
 `rules.analysis.probe_supply_cut_actions(game, role, actions)` probes standard
 Movement stops, dropped units, and standard SR destinations against an

@@ -345,6 +345,19 @@ module.exports = function (Engine) {
 		return 1
 	}
 
+	function get_movement_cost_breakdown(game, p, target, faction) {
+		let source = game.move?.current || game.pieces[p]
+		let base = get_movement_cost(game, p, target)
+		let green_connection = is_green_connection(source, target)
+		let enemy_fort_entry = green_connection ? 0 : get_enemy_fort_entry_extra_cost(game, target, faction)
+		return {
+			base,
+			enemy_fort_entry,
+			total: base + enemy_fort_entry,
+			green_connection
+		}
+	}
+
 	function is_port(s) {
 		let space = data.spaces[s]
 		return !!(space && space.port)
@@ -2444,25 +2457,54 @@ module.exports = function (Engine) {
 
 	function get_sr_cost(game_or_piece, maybe_piece, maybe_from = null, maybe_to = null, maybe_faction = null, maybe_cache = null) {
 		if (game_or_piece && typeof game_or_piece === "object" && Array.isArray(game_or_piece.pieces)) {
-			let game = game_or_piece
-			let p = maybe_piece
-			if (!(p >= 0) || !data.pieces[p]) return 0
-			let from = maybe_from
-			let to = maybe_to
-			let faction = maybe_faction
-			if (from === null || from === undefined) from = game.pieces[p]
-			if (faction === null || faction === undefined) {
-				faction = get_piece_effective_faction(game, p)
-				if (faction !== AP && faction !== CP) faction = data.pieces[p].faction
-			}
-			return (
-				get_base_sr_cost(p) +
-				get_disrupted_supply_sr_surcharge(game, p, from, faction, maybe_cache) +
-				get_german_subs_sr_surcharge(game, from, to, faction, p, maybe_cache) +
-				get_unrestricted_submarine_warfare_sr_surcharge(game, from, to, faction, p, maybe_cache)
-			)
+			return get_sr_cost_breakdown(
+				game_or_piece,
+				maybe_piece,
+				maybe_from,
+				maybe_to,
+				maybe_faction,
+				maybe_cache
+			).total
 		}
 		return get_base_sr_cost(game_or_piece)
+	}
+
+	function get_sr_cost_breakdown(game, p, from = null, to = null, faction = null, cache = null) {
+		if (!(p >= 0) || !data.pieces[p]) {
+			return {
+				base: 0,
+				disrupted_supply: 0,
+				german_subs: 0,
+				unrestricted_submarine_warfare: 0,
+				surcharge: 0,
+				total: 0
+			}
+		}
+		if (from === null || from === undefined) from = game.pieces[p]
+		if (faction === null || faction === undefined) {
+			faction = get_piece_effective_faction(game, p)
+			if (faction !== AP && faction !== CP) faction = data.pieces[p].faction
+		}
+		let base = get_base_sr_cost(p)
+		let disrupted_supply = get_disrupted_supply_sr_surcharge(game, p, from, faction, cache)
+		let german_subs = get_german_subs_sr_surcharge(game, from, to, faction, p, cache)
+		let unrestricted_submarine_warfare = get_unrestricted_submarine_warfare_sr_surcharge(
+			game,
+			from,
+			to,
+			faction,
+			p,
+			cache
+		)
+		let surcharge = disrupted_supply + german_subs + unrestricted_submarine_warfare
+		return {
+			base,
+			disrupted_supply,
+			german_subs,
+			unrestricted_submarine_warfare,
+			surcharge,
+			total: base + surcharge
+		}
 	}
 
 	function get_disrupted_supply_sr_surcharge(game, p, from, faction, cache = null) {
@@ -2864,6 +2906,14 @@ module.exports = function (Engine) {
 		return !!data.spaces[s] && has_effective_sr_port(game, s)
 	}
 
+	function is_sr_sea_departure_move(game, source, dest) {
+		if (!(source > 0 && dest > 0 && data.spaces[source] && data.spaces[dest])) return false
+		if (source === dest) return false
+		let source_is_port = is_port(source) || is_beachhead_space(game, source)
+		let dest_is_port = is_port(dest) || is_beachhead_space(game, dest)
+		return source_is_port && dest_is_port
+	}
+
 	function is_sr_destination_blocked_by_events(game, source, dest, faction) {
 		let source_is_sea_port = is_sea_sr_port_space(game, source)
 		let dest_is_sea_port = is_sea_sr_port_space(game, dest)
@@ -3001,6 +3051,54 @@ module.exports = function (Engine) {
 			}
 		}
 		return !is_sr_destination_blocked_by_events(game, source, dest, faction)
+	}
+
+	function get_sr_route_context(game, p, source = null, dest = null, faction = null) {
+		if (!(p >= 0) || !data.pieces[p]) return null
+		if (source === null || source === undefined) source = game.pieces[p]
+		if (faction === null || faction === undefined) {
+			faction = get_piece_effective_faction(game, p)
+			if (faction !== AP && faction !== CP) faction = data.pieces[p].faction
+		}
+		let source_reserve = is_reserve_space(source)
+		let destination_reserve = is_reserve_space(dest)
+		let delayed_suez =
+			!source_reserve &&
+			!destination_reserve &&
+			can_suez_delayed_sr_to_space(game, p, source, dest, faction)
+		let direct_sea =
+			!source_reserve &&
+			!destination_reserve &&
+			source !== dest &&
+			has_sr_sea_port_route(game, p, source, dest, faction)
+		let sea_sr =
+			!source_reserve &&
+			!destination_reserve &&
+			is_sr_sea_departure_move(game, source, dest)
+		let rail_only = data.pieces[p].piece_class === "LCU"
+		let overland_path =
+			!source_reserve && !destination_reserve && data.spaces[source] && data.spaces[dest]
+				? find_sr_path(game, p, source, dest, faction, rail_only)
+				: null
+		let kind = "overland"
+		if (source === dest) kind = "hold"
+		else if (source_reserve) kind = "reserve_exit"
+		else if (destination_reserve) kind = "reserve_entry"
+		else if (delayed_suez) kind = "suez_delayed"
+		else if (sea_sr) kind = "sea"
+		return {
+			kind,
+			source_reserve,
+			destination_reserve,
+			sea_sr,
+			direct_sea,
+			delayed_suez,
+			arrival_zone: delayed_suez ? get_suez_sr_arrival_zone(game, dest) : null,
+			arrival_turn: delayed_suez ? (game.turn || 0) + 1 : null,
+			rail_only,
+			overland_path: overland_path || [],
+			overland_hops: overland_path ? Math.max(0, overland_path.length - 1) : null
+		}
 	}
 
 	function build_sr_path_reachable_spaces(game, p, source, faction) {
@@ -6206,6 +6304,7 @@ module.exports = function (Engine) {
 		get_rail_connections,
 		other_faction,
 		get_movement_cost,
+		get_movement_cost_breakdown,
 		get_enemy_fort_entry_extra_cost,
 		set_debug_log,
 		get_lcu_limit_for,
@@ -6233,6 +6332,9 @@ module.exports = function (Engine) {
 		can_besiege,
 		get_besieging_pieces,
 		get_sr_cost,
+		get_sr_cost_breakdown,
+		get_sr_route_context,
+		is_sr_sea_departure_move,
 		has_sr_path,
 		can_sr_piece,
 		can_sr_to_space,

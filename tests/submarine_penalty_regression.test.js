@@ -43,6 +43,14 @@ test("German Subs applies the long-term +1 OP/+1 SR penalty to AP spaces tracing
 	expect(Engine.map.get_sr_cost(game, brIX, lemnos, apReserve, AP)).toBe(5)
 	expect(Engine.map.get_activation_cost_pair(game, cyprus)).toEqual({ move: 2, attack: 2 })
 	expect(Engine.map.get_sr_cost(game, brXVI, cyprus, apReserve, AP)).toBe(5)
+	expect(Engine.map.get_sr_cost_breakdown(game, brXVI, cyprus, apReserve, AP)).toEqual({
+		base: 4,
+		disrupted_supply: 0,
+		german_subs: 1,
+		unrestricted_submarine_warfare: 0,
+		surcharge: 1,
+		total: 5,
+	})
 })
 
 test("German Subs does not surcharge Egypt spaces that can trace supply through Suez to Sudan and Darfur", () => {

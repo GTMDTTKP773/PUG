@@ -287,14 +287,6 @@ exports.register = function (states, Engine, context) {
 		return !!(info && info.port && (info.nation === "tu" || info.nation === "tua"))
 	}
 
-	function is_sea_sr_move(from, to) {
-		if (!(from > 0 && to > 0 && data.spaces[from] && data.spaces[to])) return false
-		if (from === to) return false
-		let from_is_sea_port = Engine.map.is_port(from) || Engine.map.is_beachhead_space(game, from)
-		let to_is_sea_port = Engine.map.is_port(to) || Engine.map.is_beachhead_space(game, to)
-		return from_is_sea_port && to_is_sea_port
-	}
-
 	function format_sr_space(s) {
 		if (s === Engine.constants.RESERVE) return "预备格"
 		return space_name(s)
@@ -703,7 +695,7 @@ exports.register = function (states, Engine, context) {
 			if (!delayed_suez_sr && !Engine.map.can_sr_to_space(game, p, s, active_faction())) return
 			if (game.sr < extra_cost) return
 			game.sr -= extra_cost
-			let was_sea_sr = is_sea_sr_move(from, s)
+			let was_sea_sr = Engine.map.is_sr_sea_departure_move(game, from, s)
 			let from_was_non_balkan_beachhead =
 				Engine.map.is_beachhead_space(game, from) && Engine.map.is_non_balkan_beachhead(from)
 			let from_was_ottoman_port = is_ottoman_port_source(from)

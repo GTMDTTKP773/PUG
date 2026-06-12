@@ -39,22 +39,30 @@ function createCaucasusActionFixture() {
 }
 
 test("rules exposes a versioned optional analysis namespace", () => {
-	expect(rules.analysis.version).toBe(6)
+	expect(rules.analysis.version).toBe(10)
 	expect(rules.analysis.capabilities).toContain("action_sequence.simulate")
 	expect(rules.analysis.capabilities).toContain("activation_analysis.v1")
 	expect(rules.analysis.capabilities).toContain("candidate_context.v1")
 	expect(rules.analysis.capabilities).toContain("combat_preview.v1")
+	expect(rules.analysis.capabilities).toContain("combat_package_analysis.v1")
 	expect(rules.analysis.capabilities).toContain("decision.snapshot")
 	expect(rules.analysis.capabilities).toContain("decision.step")
+	expect(rules.analysis.capabilities).toContain("movement_analysis.v1")
+	expect(rules.analysis.capabilities).toContain("jihad_analysis.v1")
 	expect(rules.analysis.capabilities).toContain("position.public")
 	expect(rules.analysis.capabilities).toContain("position.public.v2")
+	expect(rules.analysis.capabilities).toContain("sr_analysis.v1")
 	expect(rules.analysis.capabilities).toContain("supply_cut.standard_one_step_regular")
 	expect(rules.analysis.activation_analysis).toBeTypeOf("function")
 	expect(rules.analysis.candidate_context).toBeTypeOf("function")
 	expect(rules.analysis.combat_preview).toBeTypeOf("function")
+	expect(rules.analysis.combat_package_analysis).toBeTypeOf("function")
 	expect(rules.analysis.decision_snapshot).toBeTypeOf("function")
+	expect(rules.analysis.movement_analysis).toBeTypeOf("function")
+	expect(rules.analysis.jihad_analysis).toBeTypeOf("function")
 	expect(rules.analysis.public_position).toBeTypeOf("function")
 	expect(rules.analysis.probe_supply_cut_actions).toBeTypeOf("function")
+	expect(rules.analysis.sr_analysis).toBeTypeOf("function")
 	expect(rules.analysis.step_decision).toBeTypeOf("function")
 })
 
@@ -107,6 +115,294 @@ test("rules AI activation analysis exposes stack, cost, and target facts without
 	expect(activation.actions).toHaveLength(1)
 	expect(activation.spaces[0].space).toBe(space)
 	expect(activation.spaces[0].modes).toContain("move")
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI movement analysis validates path sequences without mutating source", () => {
+	let fixture = createCaucasusActionFixture()
+	let { game, tiflis, akstafa, ru } = fixture
+	game.state = "choose_pieces_to_move"
+	game.activated = { move: [tiflis], attack: [] }
+	game.where = tiflis
+	game.move = {
+		initial: tiflis,
+		current: tiflis,
+		spaces_moved: 0,
+		pieces: [ru],
+		touched_spaces: [tiflis],
+		faction: AP
+	}
+
+	let before = JSON.stringify(game)
+	let result = rules.analysis.movement_analysis(game, AP, [
+		{
+			kind: "movement_path",
+			label: `move:${tiflis}->${akstafa}:stop`,
+			probe_supply_cut: true,
+			sequence: [["space", akstafa], ["stop", null]]
+		},
+		["space", 9999]
+	])
+
+	expect(result).toMatchObject({
+		schema: "pug-ai.movement_analysis.v1",
+		state: "choose_pieces_to_move",
+		active: AP,
+		role: AP,
+		candidate_count: 2,
+		valid_count: 1
+	})
+	expect(result.movement).toMatchObject({
+		initial: tiflis,
+		current: tiflis,
+		spaces_moved: 0,
+		selected_pieces: [ru]
+	})
+
+	let path = result.candidates[0]
+	expect(path).toMatchObject({
+		kind: "movement_path",
+		label: `move:${tiflis}->${akstafa}:stop`,
+		valid: true,
+		movement_relevant: true,
+		final_state: "end_operations",
+		total_step_cost: 1,
+		finalized_pieces: [ru]
+	})
+	expect(path.steps).toHaveLength(2)
+	expect(path.steps[0]).toMatchObject({
+		action: ["space", akstafa],
+		kind: "destination",
+		source: tiflis,
+		destination: akstafa,
+		stack_legal: true,
+		actual_step_cost: 1,
+		entered_pieces: [ru],
+		continuing_pieces: [ru],
+		finalized_pieces: [],
+		vp_delta: 0,
+		jihad_delta: 0
+	})
+	expect(path.steps[0].piece_costs[0]).toMatchObject({
+		piece: ru,
+		from: tiflis,
+		to: akstafa,
+		legal: true,
+		base: 1,
+		enemy_fort_entry: 0,
+		total: 1,
+		spent_before: 0,
+		spent_after: 1,
+		remaining_after: 3
+	})
+	expect(path.steps[0].source_space_before.raw_id).toBe(tiflis)
+	expect(path.steps[0].destination_space_before.raw_id).toBe(akstafa)
+	expect(path.steps[0].destination_space_after.pieces).toContain(ru)
+	expect(path.steps[0].movement_after.selected[0]).toMatchObject({
+		id: ru,
+		supply_status: "FULL"
+	})
+	expect(path.steps[0].movement_after.current_space.raw_id).toBe(akstafa)
+	expect(path.steps[1]).toMatchObject({
+		action: ["stop", null],
+		kind: "stop",
+		finalized_pieces: [ru],
+		ends_current_stack: true
+	})
+	expect(path.supply_cut_probe.safe).toBe(false)
+	expect(path.supply_cut_threat).toMatchObject({
+		reason: "reply_cut",
+		oos_pieces: [ru]
+	})
+
+	let invalid = result.candidates[1]
+	expect(invalid).toMatchObject({
+		valid: false,
+		movement_relevant: true,
+		error: {
+			type: "illegal_action",
+			step: 0,
+			action: ["space", 9999]
+		}
+	})
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI movement analysis reports dropped and continuing units", () => {
+	let fixture = createCaucasusActionFixture()
+	let { game, tiflis, akstafa, ru } = fixture
+	let second = findPiece(AP, "RU DIV #2")
+	game.state = "move_stack"
+	game.activated = { move: [tiflis], attack: [] }
+	game.where = akstafa
+	game.pieces[ru] = akstafa
+	game.pieces[second] = akstafa
+	game.move = {
+		initial: tiflis,
+		current: akstafa,
+		spaces_moved: 1,
+		pieces: [ru, second],
+		touched_spaces: [tiflis, akstafa],
+		faction: AP
+	}
+
+	let view = rules.view(game, AP)
+	expect(view.actions.piece).toContain(second)
+	let before = JSON.stringify(game)
+	let result = rules.analysis.movement_analysis(game, AP, [["piece", second]])
+	let candidate = result.candidates[0]
+
+	expect(candidate.valid).toBe(true)
+	expect(candidate.steps[0]).toMatchObject({
+		kind: "drop_piece",
+		selected_removed: [second],
+		continuing_pieces: [ru],
+		finalized_pieces: [second],
+		ends_current_stack: false,
+		movement_after: {
+			current: akstafa,
+			spaces_moved: 1,
+			selected_pieces: [ru]
+		}
+	})
+	expect(candidate.finalized_pieces).toEqual([second])
+	expect(candidate.final.selected).toHaveLength(1)
+	expect(candidate.final.selected[0].id).toBe(ru)
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI SR analysis exposes authoritative reserve semantics without mutating source", () => {
+	let game = setupGame(2026061102, "Historical", { no_supply_warnings: true })
+	game.active = AP
+	game.state = "sr_phase"
+	game.sr = 6
+	game.sr_moved = []
+
+	let reserve = Engine.game_utils.get_scu_reserve_box(AP)
+	let piece = game.pieces.findIndex(
+		(space, p) =>
+			space === reserve &&
+			Engine.map.can_sr_piece(game, p, AP) &&
+			Engine.map.get_sr_destinations(game, p, AP).length > 0
+	)
+	expect(piece).toBeGreaterThanOrEqual(0)
+	let destination = Engine.map.get_sr_destinations(game, piece, AP)[0]
+	let expectedCost = Engine.map.get_sr_cost(game, piece, reserve, destination, AP)
+	let before = JSON.stringify(game)
+	let originalCanSrPiece = Engine.map.can_sr_piece
+	let originalGetSrDestinations = Engine.map.get_sr_destinations
+	let canSrPieceCalls = 0
+	let getSrDestinationsCalls = 0
+	Engine.map.can_sr_piece = function (...args) {
+		canSrPieceCalls += 1
+		return originalCanSrPiece(...args)
+	}
+	Engine.map.get_sr_destinations = function (...args) {
+		getSrDestinationsCalls += 1
+		return originalGetSrDestinations(...args)
+	}
+	let analysis
+	try {
+		analysis = rules.analysis.sr_analysis(game, AP, [
+			[piece, destination],
+			{ piece, destination: reserve },
+		])
+	} finally {
+		Engine.map.can_sr_piece = originalCanSrPiece
+		Engine.map.get_sr_destinations = originalGetSrDestinations
+	}
+	let legal = analysis.packages[0]
+	let illegal = analysis.packages[1]
+
+	expect(analysis).toMatchObject({
+		schema: "pug-ai.sr_analysis.v1",
+		state: "sr_phase",
+		active: AP,
+		role: AP,
+		package_count: 2,
+	})
+	expect(legal).toMatchObject({
+		piece,
+		source: reserve,
+		destination,
+		cost: expectedCost,
+		cost_breakdown: {
+			base: 1,
+			surcharge: 0,
+			total: expectedCost,
+		},
+		remaining_sr: 6,
+		affordable: true,
+		piece_legal: true,
+		destination_legal: true,
+		source_reserve: true,
+		destination_reserve: false,
+		route: {
+			kind: "reserve_exit",
+			source_reserve: true,
+			destination_reserve: false,
+			sea_sr: false,
+			delayed_suez: false,
+		},
+		departure: {
+			jihad_increase: 0,
+		},
+	})
+	expect(legal.piece_context.id).toBe(piece)
+	expect(legal.source_space).toMatchObject({
+		raw_id: reserve,
+		reserve_box: true,
+		friendly_controlled: true,
+	})
+	expect(legal.destination_space.raw_id).toBe(destination)
+	expect(illegal).toMatchObject({
+		piece,
+		source: reserve,
+		destination: reserve,
+		piece_legal: true,
+		destination_legal: false,
+		source_reserve: true,
+		destination_reserve: true,
+	})
+	expect(canSrPieceCalls).toBe(1)
+	expect(getSrDestinationsCalls).toBe(1)
+	expect(JSON.stringify(game)).toBe(before)
+})
+
+test("rules AI SR analysis compares only unpaid destination cost after the piece is selected", () => {
+	let game = setupGame(2026061103, "Historical", { no_supply_warnings: true })
+	game.active = AP
+	game.state = "sr_phase"
+	game.sr_moved = []
+
+	let reserve = Engine.game_utils.get_scu_reserve_box(AP)
+	let piece = game.pieces.findIndex(
+		(space, p) =>
+			space === reserve &&
+			Engine.map.can_sr_piece(game, p, AP) &&
+			Engine.map.get_sr_destinations(game, p, AP).length > 0
+	)
+	let destination = Engine.map.get_sr_destinations(game, piece, AP)[0]
+	let totalCost = Engine.map.get_sr_cost(game, piece, reserve, destination, AP)
+	let paidCost = Engine.map.get_sr_cost(game, piece, reserve, null, AP)
+
+	game.state = "sr_move"
+	game.sr_piece = piece
+	game.sr = totalCost - paidCost
+	let before = JSON.stringify(game)
+	let record = rules.analysis.sr_analysis(game, AP, [[piece, destination]]).packages[0]
+
+	expect(record).toMatchObject({
+		cost: totalCost,
+		paid_cost: paidCost,
+		additional_cost: totalCost - paidCost,
+		decision_cost: totalCost - paidCost,
+		cost_stage: "destination",
+		available_sr: totalCost - paidCost,
+		affordable: true,
+		piece_legal: true,
+		destination_legal: true,
+	})
 	expect(JSON.stringify(game)).toBe(before)
 })
 

@@ -63,7 +63,10 @@ module.exports = function create_candidate_context_analysis(Engine) {
 					? Engine.map.create_supply_context(game)
 					: null,
 			source_cache: new Map(),
-			status_cache: new Map()
+			status_cache: new Map(),
+			disrupted_supply_sr_surcharge: new Map(),
+			german_subs_sr_surcharge: new Map(),
+			unrestricted_submarine_warfare_sr_surcharge: new Map()
 		}
 	}
 
@@ -378,6 +381,222 @@ module.exports = function create_candidate_context_analysis(Engine) {
 		}
 	}
 
+	function is_reserve_space(s) {
+		return !!(Engine.map?.is_reserve_space && Engine.map.is_reserve_space(s))
+	}
+
+	function reserve_context(game, s, role, cache) {
+		if (!is_reserve_space(s)) return null
+		let info = data.spaces[s] || {}
+		let faction = short_faction(role || game.active)
+		let reserve_faction = short_faction(info.faction)
+		return {
+			raw_id: s,
+			name: info.name || "Reserve",
+			map: info.map || "Reserve Box",
+			area: info.area || "",
+			region: info.region || "",
+			terrain: info.terrain || "",
+			nation: info.nation || "",
+			faction: reserve_faction,
+			control: reserve_faction,
+			friendly_controlled: reserve_faction === faction,
+			enemy_controlled: reserve_faction === other_faction(faction),
+			vp: 0,
+			fort: 0,
+			port: false,
+			jihad_city: false,
+			island_base: false,
+			tribal_activity_grid: "",
+			beachhead: false,
+			fort_destroyed: false,
+			fort_besieged: false,
+			fort_owner: "neutral",
+			reserve_box: true,
+			stack: stack_summary(game, s, faction, cache)
+		}
+	}
+
+	function sr_location_context(game, s, role, cache) {
+		if (is_reserve_space(s)) return reserve_context(game, s, role, cache)
+		return is_real_space(s) ? space_context(game, s, role, cache) : null
+	}
+
+	function normalize_sr_package(pkg) {
+		if (Array.isArray(pkg)) {
+			return {
+				piece: pkg[0],
+				destination: pkg.length > 1 ? pkg[1] : null
+			}
+		}
+		if (pkg && typeof pkg === "object") {
+			return {
+				piece: pkg.piece,
+				destination: pkg.destination
+			}
+		}
+		return { piece: null, destination: null }
+	}
+
+	function sr_departure_context(game, piece, source, route, role) {
+		let result = {
+			sole_supply_piece_ids: [],
+			sole_supply_piece_count: 0,
+			non_balkan_beachhead: false,
+			ottoman_port: false,
+			jihad_increase: 0
+		}
+		if (role !== AP || !route?.sea_sr || !data.spaces[source]) return result
+		result.non_balkan_beachhead = !!(
+			Engine.map?.is_beachhead_space &&
+			Engine.map.is_beachhead_space(game, source) &&
+			Engine.map?.is_non_balkan_beachhead &&
+			Engine.map.is_non_balkan_beachhead(source)
+		)
+		let source_info = data.spaces[source]
+		result.ottoman_port = !!(
+			source_info.port &&
+			(source_info.nation === "tu" || source_info.nation === "tua")
+		)
+		if (
+			!result.non_balkan_beachhead &&
+			!result.ottoman_port
+		) {
+			return result
+		}
+		if (typeof Engine.map?.get_ap_units_supplied_solely_through_source !== "function") return result
+		let pieces = Engine.map.get_ap_units_supplied_solely_through_source(game, source)
+		result.sole_supply_piece_ids = pieces
+		result.sole_supply_piece_count = pieces.length
+		if (pieces.length === 1 && pieces[0] === piece) result.jihad_increase = 1
+		return result
+	}
+
+	function sr_analysis(game, role, packages = []) {
+		let acting_role = short_faction(role || game.active)
+		let cache = create_supply_cache(game)
+		let piece_legality = new Map()
+		let piece_destinations = new Map()
+		let piece_contexts = new Map()
+		let location_contexts = new Map()
+		let paid_costs = new Map()
+		let get_piece_legality = (piece) => {
+			if (!piece_legality.has(piece)) {
+				piece_legality.set(
+					piece,
+					!!(
+						data.pieces[piece] &&
+						Engine.map?.can_sr_piece &&
+						Engine.map.can_sr_piece(game, piece, acting_role, cache)
+					)
+				)
+			}
+			return piece_legality.get(piece)
+		}
+		let get_piece_destinations = (piece) => {
+			if (!piece_destinations.has(piece)) {
+				let destinations =
+					get_piece_legality(piece) && Engine.map?.get_sr_destinations
+						? Engine.map.get_sr_destinations(game, piece, acting_role)
+						: []
+				piece_destinations.set(piece, new Set(destinations))
+			}
+			return piece_destinations.get(piece)
+		}
+		let get_piece_context = (piece) => {
+			if (!piece_contexts.has(piece)) {
+				piece_contexts.set(piece, data.pieces[piece] ? piece_context(game, piece, cache) : null)
+			}
+			return piece_contexts.get(piece)
+		}
+		let get_location_context = (space) => {
+			if (!location_contexts.has(space)) {
+				location_contexts.set(space, sr_location_context(game, space, acting_role, cache))
+			}
+			return location_contexts.get(space)
+		}
+		let get_paid_cost = (piece, source) => {
+			if (!paid_costs.has(piece)) {
+				let paid =
+					data.pieces[piece] && Engine.map?.get_sr_cost_breakdown
+						? Engine.map.get_sr_cost_breakdown(game, piece, source, null, acting_role, cache).total
+						: data.pieces[piece] && Engine.map?.get_sr_cost
+							? Engine.map.get_sr_cost(game, piece, source, null, acting_role, cache)
+							: 0
+				paid_costs.set(piece, paid)
+			}
+			return paid_costs.get(piece)
+		}
+		let records = packages.map((pkg) => {
+			let { piece, destination } = normalize_sr_package(pkg)
+			let source = data.pieces[piece] ? game.pieces[piece] : null
+			let piece_legal = get_piece_legality(piece)
+			let destination_legal = !!(
+				piece_legal &&
+				(Engine.map?.get_sr_destinations
+					? get_piece_destinations(piece).has(destination)
+					: Engine.map?.can_sr_to_space &&
+						Engine.map.can_sr_to_space(game, piece, destination, acting_role))
+			)
+			let cost =
+				data.pieces[piece] && Engine.map?.get_sr_cost_breakdown
+					? Engine.map.get_sr_cost_breakdown(game, piece, source, destination, acting_role, cache)
+					: {
+							base:
+								data.pieces[piece] && Engine.map?.get_sr_cost
+									? Engine.map.get_sr_cost(game, piece, source, destination, acting_role, cache)
+									: 0,
+							disrupted_supply: 0,
+							german_subs: 0,
+							unrestricted_submarine_warfare: 0,
+							surcharge: 0,
+							total:
+								data.pieces[piece] && Engine.map?.get_sr_cost
+									? Engine.map.get_sr_cost(game, piece, source, destination, acting_role, cache)
+									: 0
+						}
+			let route = Engine.map?.get_sr_route_context
+				? Engine.map.get_sr_route_context(game, piece, source, destination, acting_role)
+				: null
+			let destination_stage = game.state === "sr_move" && game.sr_piece === piece
+			let paid_cost = destination_stage ? get_paid_cost(piece, source) : 0
+			let additional_cost = destination_stage ? Math.max(0, cost.total - paid_cost) : cost.total
+			let decision_cost = additional_cost
+			let available_sr = typeof game.sr === "number" ? game.sr : null
+			return {
+				piece,
+				source,
+				destination,
+				cost: cost.total,
+				cost_breakdown: cost,
+				paid_cost,
+				additional_cost,
+				decision_cost,
+				cost_stage: destination_stage ? "destination" : "package",
+				available_sr,
+				remaining_sr: available_sr,
+				affordable: available_sr === null || decision_cost <= available_sr,
+				piece_legal,
+				destination_legal,
+				source_reserve: is_reserve_space(source),
+				destination_reserve: is_reserve_space(destination),
+				route,
+				departure: sr_departure_context(game, piece, source, route, acting_role),
+				piece_context: get_piece_context(piece),
+				source_space: get_location_context(source),
+				destination_space: get_location_context(destination)
+			}
+		})
+		return {
+			schema: "pug-ai.sr_analysis.v1",
+			state: game.state || "",
+			active: short_faction(game.active),
+			role: acting_role,
+			package_count: records.length,
+			packages: records
+		}
+	}
+
 	function card_context(action) {
 		let [name, card] = action
 		if (name !== "card" && !name.startsWith("play_")) return null
@@ -482,6 +701,7 @@ module.exports = function create_candidate_context_analysis(Engine) {
 
 	return {
 		candidate_context,
-		activation_analysis
+		activation_analysis,
+		sr_analysis
 	}
 }

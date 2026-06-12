@@ -636,13 +636,18 @@ module.exports = function (Engine) {
 
 	Object.assign(exports, {
 		update_jihad_level,
+		can_select_tribe_for_jihad_placement,
+		can_place_tribe_in_jihad_space,
+		collect_jihad_city_presence,
 		get_jihad_city_effective_owner,
 		get_jihad_city_scoring_owner,
 		sync_jihad_city_state,
 		on_control_changed,
 		get_tribe_type,
+		get_jihad_country_for_space,
 		has_jihad_prereq,
 		has_cp_regular_in_country,
+		get_jihad_revolt_target,
 		check_immediate_jihad_rebellion_on_entry,
 		register,
 		states
