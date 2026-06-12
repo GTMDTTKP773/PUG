@@ -514,6 +514,8 @@ module.exports = function (Engine) {
 		if (state.russian_revolution === undefined) state.russian_revolution = 0
 		if (state.god_save_the_tsar === undefined) state.god_save_the_tsar = 0
 		if (state.ge_to_tu_rp_used === undefined) state.ge_to_tu_rp_used = 0
+		if (state.br_to_ru_rp_used === undefined) state.br_to_ru_rp_used = false
+		if (state.br_to_ru_rp_spent === undefined) state.br_to_ru_rp_spent = 0
 		if (!Array.isArray(state.beachheads)) state.beachheads = []
 		if (state.unplaced_beachheads === undefined) state.unplaced_beachheads = 0
 		if (Engine.map && typeof Engine.map.is_potential_beachhead_space === "function") {
@@ -674,6 +676,8 @@ module.exports = function (Engine) {
 			russian_revolution: 0,
 			god_save_the_tsar: 0,
 			ge_to_tu_rp_used: 0,
+			br_to_ru_rp_used: false,
+			br_to_ru_rp_spent: 0,
 			ap_actions: Array(7).fill(null),
 			cp_actions: Array(7).fill(null),
 			where: -1,

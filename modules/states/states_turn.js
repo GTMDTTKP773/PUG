@@ -1101,6 +1101,7 @@ exports.register = function (states, Engine, context) {
 	function enter_replacement_rp_phase() {
 		game.kitchener_conversion_used = false
 		game.br_to_ru_rp_used = false
+		game.br_to_ru_rp_spent = 0
 
 		if (game.events["central_asia_rebellion"]) game.rp_rebel.ca += 1
 		if (game.events["afghan_alliance"]) game.rp_rebel.af += 1

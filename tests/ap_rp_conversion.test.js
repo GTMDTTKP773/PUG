@@ -9,7 +9,14 @@ function getTurnFuncs(game) {
 	turnStates.set_globals(game)
 	return turnStates.register({}, Engine, {
 		log: () => {},
+		log_h1: () => {},
+		get_pieces_in_space: Engine.map.get_pieces_in_space,
 		find_space: Engine.game_utils.find_space,
+		get_reserve_box: Engine.game_utils.get_reserve_box,
+		is_eliminated: (g, p) => Engine.game_utils.is_eliminated(g, p),
+		is_not_on_map: (g, p) => Engine.game_utils.is_not_on_map(g, p),
+		get_season: Engine.game_utils.get_season,
+		PHASE_SEQUENCE: {},
 		AP: Engine.constants.AP,
 		CP: Engine.constants.CP
 	})
@@ -33,6 +40,25 @@ test("Kitchener 的英转俄只允许 1 点，并支持 BR+RU 混付且 BR 优�
 	expect(game.rp_ap.ru).toBe(1)
 	expect(game.br_to_ru_rp_used).toBe(true)
 	expect(game.br_to_ru_rp_spent).toBe(1)
+})
+
+test("Kitchener 的英转俄额度会在每个补员阶段重新开放", () => {
+	let game = setupGame(2026041611, "Historical")
+	let piece = findPiece("RU DIV #1")
+
+	game.events = { kitchener: 1 }
+	game.br_to_ru_rp_used = true
+	game.br_to_ru_rp_spent = 1
+	game.rp_ap = { a: 0, br: 1, fr: 0, ru: 0, in: 0, it: 0 }
+
+	expect(Engine.map.can_afford_replacement(game, piece, 1)).toBe(false)
+
+	getTurnFuncs(game).start_replacement_phase()
+
+	expect(game.br_to_ru_rp_used).toBe(false)
+	expect(game.br_to_ru_rp_spent).toBe(0)
+	expect(game.state).toBe("rp_phase")
+	expect(Engine.map.can_afford_replacement(game, piece, 1)).toBe(true)
 })
 
 test("Kitchener 不能把 2 点 BR 一次性整包当成 2 点 RU 用", () => {
