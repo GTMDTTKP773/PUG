@@ -3140,6 +3140,7 @@ exports.register = function (states, Engine, context) {
 			Engine.sync_neutral_vp_state(game, retreat_origin)
 			Engine.sync_jihad_city_state(game, retreat_origin)
 			Engine.sync_region_control(game, retreat_origin)
+			Engine.sync_siege_status(retreat_origin, faction)
 		}
 		Engine.sync_region_control(game, destination)
 		Engine.sync_neutral_vp_state(game, destination)
